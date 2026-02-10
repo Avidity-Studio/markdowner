@@ -1,0 +1,349 @@
+import { useState, useCallback, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
+import { marked } from "marked";
+import { FolderOpen, Save, FilePlus, Clock, X, Upload } from "lucide-react";
+import { ThemeToggle } from "./components/ThemeToggle";
+import "./App.css";
+
+function App() {
+  const [markdown, setMarkdown] = useState<string>("# Welcome to Markdown Editor\n\nStart typing your markdown here...\n\n## Features\n\n- **Live preview** - See your changes in real-time\n- **File operations** - Open and save markdown files\n- **Drag & drop** - Drop markdown files to open them\n- **Clean interface** - Focus on your writing\n\n> Tip: Use the toolbar buttons to open or save files, or drag and drop a markdown file onto the window!");
+  const [currentFile, setCurrentFile] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [recentFiles, setRecentFiles] = useState<string[]>([]);
+  const [showRecents, setShowRecents] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const recentsRef = useRef<HTMLDivElement>(null);
+
+  // Debounced markdown rendering
+  const [html, setHtml] = useState<string>("");
+
+  useEffect(() => {
+    const renderMarkdown = async () => {
+      const result = await marked.parse(markdown);
+      setHtml(result);
+    };
+    renderMarkdown();
+  }, [markdown]);
+
+  // Load recent files on mount
+  useEffect(() => {
+    loadRecentFiles();
+  }, []);
+
+  // Close recents dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (recentsRef.current && !recentsRef.current.contains(event.target as Node)) {
+        setShowRecents(false);
+      }
+    };
+
+    if (showRecents) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showRecents]);
+
+  const loadRecentFiles = async () => {
+    try {
+      const files = await invoke<string[]>("get_recent_files");
+      setRecentFiles(files);
+    } catch (error) {
+      console.error("Failed to load recent files:", error);
+    }
+  };
+
+  const handleNewFile = useCallback(() => {
+    setMarkdown("# New Document\n\nStart writing here...");
+    setCurrentFile(null);
+    setIsDirty(false);
+  }, []);
+
+  const handleOpenFile = useCallback(async () => {
+    try {
+      const filePath = await invoke<string | null>("open_file_dialog");
+      if (filePath) {
+        const content = await invoke<string>("read_file", { path: filePath });
+        setMarkdown(content);
+        setCurrentFile(filePath);
+        setIsDirty(false);
+        loadRecentFiles();
+      }
+    } catch (error) {
+      console.error("Failed to open file:", error);
+      alert("Failed to open file: " + error);
+    }
+  }, []);
+
+  const handleOpenRecentFile = useCallback(async (filePath: string) => {
+    try {
+      const content = await invoke<string>("read_file", { path: filePath });
+      setMarkdown(content);
+      setCurrentFile(filePath);
+      setIsDirty(false);
+      // Add to recents and reload the list
+      await invoke("add_to_recents", { path: filePath });
+      loadRecentFiles();
+      setShowRecents(false);
+    } catch (error) {
+      console.error("Failed to open file:", error);
+      alert("Failed to open file: " + error);
+    }
+  }, []);
+
+  const handleSaveFile = useCallback(async () => {
+    try {
+      let filePath = currentFile;
+      if (!filePath) {
+        filePath = await invoke<string | null>("save_file_dialog");
+      }
+      if (filePath) {
+        await invoke("write_file", { path: filePath, content: markdown });
+        setCurrentFile(filePath);
+        setIsDirty(false);
+        loadRecentFiles();
+      }
+    } catch (error) {
+      console.error("Failed to save file:", error);
+      alert("Failed to save file: " + error);
+    }
+  }, [currentFile, markdown]);
+
+  const handleClearRecents = useCallback(async () => {
+    try {
+      await invoke("clear_recent_files");
+      setRecentFiles([]);
+    } catch (error) {
+      console.error("Failed to clear recent files:", error);
+    }
+  }, []);
+
+  const handleMarkdownChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMarkdown(e.target.value);
+    setIsDirty(true);
+  }, []);
+
+  const getFileName = (path: string) => {
+    return path.split("/").pop() || path;
+  };
+
+  // Tauri native drag and drop handlers
+  const handleTauriDrop = useCallback(async (paths: string[]) => {
+    if (paths && paths.length > 0) {
+      const filePath = paths[0];
+      
+      // Check if file is a markdown file
+      const isMarkdown = filePath.toLowerCase().endsWith('.md') || 
+                        filePath.toLowerCase().endsWith('.markdown') ||
+                        filePath.toLowerCase().endsWith('.mdx');
+      
+      if (!isMarkdown) {
+        alert("Please drop a markdown file (.md, .markdown, or .mdx)");
+        return;
+      }
+
+      try {
+        const content = await invoke<string>("read_file", { path: filePath });
+        setMarkdown(content);
+        setCurrentFile(filePath);
+        setIsDirty(false);
+        loadRecentFiles();
+      } catch (error) {
+        console.error("Failed to open file:", error);
+        alert("Failed to open file: " + error);
+      }
+    }
+  }, []);
+
+  // Set up Tauri drag-drop event listeners
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    
+    const unlistenDragEnter = appWindow.onDragDropEvent((event) => {
+      if (event.payload.type === 'enter') {
+        setIsDragging(true);
+      } else if (event.payload.type === 'leave') {
+        setIsDragging(false);
+      } else if (event.payload.type === 'drop') {
+        setIsDragging(false);
+        handleTauriDrop(event.payload.paths);
+      }
+    });
+
+    return () => {
+      unlistenDragEnter.then(fn => fn());
+    };
+  }, [handleTauriDrop]);
+
+  // Set up dock drag-drop event listener (macOS)
+  useEffect(() => {
+    // Listen for dock-open-file event from Rust
+    const unlistenDockFile = listen<string>('dock-open-file', (event) => {
+      const filePath = event.payload;
+      if (filePath) {
+        // Validate it's a markdown file
+        const isMarkdown = filePath.toLowerCase().endsWith('.md') || 
+                          filePath.toLowerCase().endsWith('.markdown') ||
+                          filePath.toLowerCase().endsWith('.mdx');
+        
+        if (isMarkdown) {
+          handleOpenRecentFile(filePath);
+        } else {
+          alert("Please open a markdown file (.md, .markdown, or .mdx)");
+        }
+      }
+    });
+
+    return () => {
+      unlistenDockFile.then(fn => fn());
+    };
+  }, [handleOpenRecentFile]);
+
+  // HTML5 drag and drop handlers for visual feedback
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    // Prevent default to allow the Tauri native event to handle it
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  return (
+    <div 
+      className="app-container"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Toolbar */}
+      <div className="toolbar">
+        <div className="toolbar-left">
+          <h1 className="app-title">Markdown Editor</h1>
+          {currentFile && (
+            <span className="file-path">
+              {currentFile.split("/").pop()}{isDirty && " *"}
+            </span>
+          )}
+        </div>
+        <div className="toolbar-actions">
+          <ThemeToggle />
+          <div className="toolbar-divider" />
+          
+          {/* Recents Dropdown */}
+          <div className="recents-dropdown" ref={recentsRef}>
+            <button 
+              onClick={() => setShowRecents(!showRecents)} 
+              className="btn btn-secondary" 
+              title="Recent Files"
+            >
+              <Clock size={18} />
+              <span>Recents</span>
+            </button>
+            {showRecents && (
+              <div className="recents-menu">
+                {recentFiles.length === 0 ? (
+                  <div className="recents-empty">No recent files</div>
+                ) : (
+                  <>
+                    <div className="recents-list">
+                      {recentFiles.map((file, index) => (
+                        <button
+                          key={index}
+                          className="recents-item"
+                          onClick={() => handleOpenRecentFile(file)}
+                          title={file}
+                        >
+                          <span className="recents-item-name">{getFileName(file)}</span>
+                          <span className="recents-item-path">{file}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="recents-footer">
+                      <button className="recents-clear" onClick={handleClearRecents}>
+                        <X size={14} />
+                        Clear Recents
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          
+          <button onClick={handleNewFile} className="btn btn-secondary" title="New File">
+            <FilePlus size={18} />
+            <span>New</span>
+          </button>
+          <button onClick={handleOpenFile} className="btn btn-secondary" title="Open File">
+            <FolderOpen size={18} />
+            <span>Open</span>
+          </button>
+          <button onClick={handleSaveFile} className="btn btn-primary" title="Save File">
+            <Save size={18} />
+            <span>Save</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="editor-container">
+        {/* Editor Pane */}
+        <div className="editor-pane">
+          <div className="pane-header">Markdown</div>
+          <textarea
+            className="markdown-input"
+            value={markdown}
+            onChange={handleMarkdownChange}
+            placeholder="Type your markdown here..."
+            spellCheck={false}
+          />
+        </div>
+
+        {/* Preview Pane */}
+        <div className="preview-pane">
+          <div className="pane-header">Preview</div>
+          <div 
+            className="markdown-preview"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        </div>
+      </div>
+
+      {/* Status Bar */}
+      <div className="status-bar">
+        <span>{markdown.length} characters</span>
+        <span>{markdown.split(/\s+/).filter(w => w.length > 0).length} words</span>
+        <span>{isDirty ? "Unsaved" : "Saved"}</span>
+      </div>
+
+      {/* Drag and Drop Overlay */}
+      {isDragging && (
+        <div className="drag-overlay">
+          <div className="drag-overlay-content">
+            <Upload size={64} />
+            <p>Drop markdown file to open</p>
+            <span className="drag-overlay-hint">.md, .markdown, .mdx</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
