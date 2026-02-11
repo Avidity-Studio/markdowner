@@ -1,255 +1,343 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { listen } from "@tauri-apps/api/event";
-import { marked } from "marked";
-import { FolderOpen, Save, FilePlus, Clock, X, Upload } from "lucide-react";
-import { ThemeToggle } from "./components/ThemeToggle";
-import "./App.css";
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { listen } from '@tauri-apps/api/event'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import {
+  FolderOpen,
+  Save,
+  FilePlus,
+  Clock,
+  X,
+  Upload,
+  AlertCircle,
+  CheckCircle,
+  Info,
+  XCircle,
+} from 'lucide-react'
+import { ThemeToggle } from './components/ThemeToggle'
+import './App.css'
+
+// Toast notification types
+type ToastType = 'error' | 'success' | 'info'
+
+interface Toast {
+  id: number
+  message: string
+  type: ToastType
+}
 
 function App() {
-  const [markdown, setMarkdown] = useState<string>("# Welcome to Markdown Editor\n\nStart typing your markdown here...\n\n## Features\n\n- **Live preview** - See your changes in real-time\n- **File operations** - Open and save markdown files\n- **Drag & drop** - Drop markdown files to open them\n- **Clean interface** - Focus on your writing\n\n> Tip: Use the toolbar buttons to open or save files, or drag and drop a markdown file onto the window!");
-  const [currentFile, setCurrentFile] = useState<string | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
-  const [recentFiles, setRecentFiles] = useState<string[]>([]);
-  const [showRecents, setShowRecents] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const recentsRef = useRef<HTMLDivElement>(null);
+  const [markdown, setMarkdown] = useState<string>(
+    '# Welcome to Markdown Editor\n\nStart typing your markdown here...\n\n## Features\n\n- **Live preview** - See your changes in real-time\n- **File operations** - Open and save markdown files\n- **Drag & drop** - Drop markdown files to open them\n- **Clean interface** - Focus on your writing\n\n> Tip: Use the toolbar buttons to open or save files, or drag and drop a markdown file onto the window!'
+  )
+  const [currentFile, setCurrentFile] = useState<string | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
+  const [recentFiles, setRecentFiles] = useState<string[]>([])
+  const [showRecents, setShowRecents] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const recentsRef = useRef<HTMLDivElement>(null)
+  const toastIdRef = useRef(0)
 
-  // Debounced markdown rendering
-  const [html, setHtml] = useState<string>("");
+  // Debounced markdown rendering with sanitization
+  const [html, setHtml] = useState<string>('')
 
   useEffect(() => {
     const renderMarkdown = async () => {
-      const result = await marked.parse(markdown);
-      setHtml(result);
-    };
-    renderMarkdown();
-  }, [markdown]);
+      const rawHtml = await marked.parse(markdown)
+      // Sanitize HTML to prevent XSS attacks
+      const sanitizedHtml = DOMPurify.sanitize(rawHtml)
+      setHtml(sanitizedHtml)
+    }
+    renderMarkdown()
+  }, [markdown])
+
+  // Toast notification helper
+  const showToast = useCallback((message: string, type: ToastType = 'info') => {
+    const id = ++toastIdRef.current
+    setToasts(prev => [...prev, { id, message, type }])
+    // Auto-remove toast after 5 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id))
+    }, 5000)
+  }, [])
+
+  const removeToast = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }, [])
 
   // Load recent files on mount
   useEffect(() => {
-    loadRecentFiles();
-  }, []);
+    loadRecentFiles()
+  }, [])
 
   // Close recents dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (recentsRef.current && !recentsRef.current.contains(event.target as Node)) {
-        setShowRecents(false);
+        setShowRecents(false)
       }
-    };
+    }
 
     if (showRecents) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showRecents]);
+  }, [showRecents])
 
   const loadRecentFiles = async () => {
     try {
-      const files = await invoke<string[]>("get_recent_files");
-      setRecentFiles(files);
+      const files = await invoke<string[]>('get_recent_files')
+      setRecentFiles(files)
     } catch (error) {
-      console.error("Failed to load recent files:", error);
+      console.error('Failed to load recent files:', error)
     }
-  };
+  }
 
   const handleNewFile = useCallback(() => {
-    setMarkdown("# New Document\n\nStart writing here...");
-    setCurrentFile(null);
-    setIsDirty(false);
-  }, []);
+    setMarkdown('# New Document\n\nStart writing here...')
+    setCurrentFile(null)
+    setIsDirty(false)
+    showToast('New document created', 'success')
+  }, [showToast])
 
   const handleOpenFile = useCallback(async () => {
     try {
-      const filePath = await invoke<string | null>("open_file_dialog");
+      const filePath = await invoke<string | null>('open_file_dialog')
       if (filePath) {
-        const content = await invoke<string>("read_file", { path: filePath });
-        setMarkdown(content);
-        setCurrentFile(filePath);
-        setIsDirty(false);
-        loadRecentFiles();
+        const content = await invoke<string>('read_file', { path: filePath })
+        setMarkdown(content)
+        setCurrentFile(filePath)
+        setIsDirty(false)
+        loadRecentFiles()
+        showToast(`Opened: ${filePath.split('/').pop()}`, 'success')
       }
     } catch (error) {
-      console.error("Failed to open file:", error);
-      alert("Failed to open file: " + error);
+      console.error('Failed to open file:', error)
+      showToast(`Failed to open file: ${error}`, 'error')
     }
-  }, []);
+  }, [showToast])
 
-  const handleOpenRecentFile = useCallback(async (filePath: string) => {
-    try {
-      const content = await invoke<string>("read_file", { path: filePath });
-      setMarkdown(content);
-      setCurrentFile(filePath);
-      setIsDirty(false);
-      // Add to recents and reload the list
-      await invoke("add_to_recents", { path: filePath });
-      loadRecentFiles();
-      setShowRecents(false);
-    } catch (error) {
-      console.error("Failed to open file:", error);
-      alert("Failed to open file: " + error);
-    }
-  }, []);
+  const handleOpenRecentFile = useCallback(
+    async (filePath: string) => {
+      try {
+        const content = await invoke<string>('read_file', { path: filePath })
+        setMarkdown(content)
+        setCurrentFile(filePath)
+        setIsDirty(false)
+        // Add to recents and reload the list
+        await invoke('add_to_recents', { path: filePath })
+        loadRecentFiles()
+        setShowRecents(false)
+        showToast(`Opened: ${filePath.split('/').pop()}`, 'success')
+      } catch (error) {
+        console.error('Failed to open file:', error)
+        showToast(`Failed to open file: ${error}`, 'error')
+        // Remove from recents if file no longer exists or is inaccessible
+        if (String(error).includes('does not exist') || String(error).includes('not readable')) {
+          loadRecentFiles() // Refresh list which will filter out invalid files
+        }
+      }
+    },
+    [showToast]
+  )
 
   const handleSaveFile = useCallback(async () => {
     try {
-      let filePath = currentFile;
+      let filePath = currentFile
       if (!filePath) {
-        filePath = await invoke<string | null>("save_file_dialog");
+        filePath = await invoke<string | null>('save_file_dialog')
       }
       if (filePath) {
-        await invoke("write_file", { path: filePath, content: markdown });
-        setCurrentFile(filePath);
-        setIsDirty(false);
-        loadRecentFiles();
+        await invoke('write_file', { path: filePath, content: markdown })
+        setCurrentFile(filePath)
+        setIsDirty(false)
+        loadRecentFiles()
+        showToast(`Saved: ${filePath.split('/').pop()}`, 'success')
       }
     } catch (error) {
-      console.error("Failed to save file:", error);
-      alert("Failed to save file: " + error);
+      console.error('Failed to save file:', error)
+      showToast(`Failed to save file: ${error}`, 'error')
     }
-  }, [currentFile, markdown]);
+  }, [currentFile, markdown, showToast])
 
   const handleClearRecents = useCallback(async () => {
     try {
-      await invoke("clear_recent_files");
-      setRecentFiles([]);
+      await invoke('clear_recent_files')
+      setRecentFiles([])
+      showToast('Recent files cleared', 'info')
     } catch (error) {
-      console.error("Failed to clear recent files:", error);
+      console.error('Failed to clear recent files:', error)
+      showToast(`Failed to clear recent files: ${error}`, 'error')
     }
-  }, []);
+  }, [showToast])
 
   const handleMarkdownChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMarkdown(e.target.value);
-    setIsDirty(true);
-  }, []);
+    setMarkdown(e.target.value)
+    setIsDirty(true)
+  }, [])
 
   const getFileName = (path: string) => {
-    return path.split("/").pop() || path;
-  };
+    return path.split('/').pop() || path
+  }
 
   // Tauri native drag and drop handlers
-  const handleTauriDrop = useCallback(async (paths: string[]) => {
-    if (paths && paths.length > 0) {
-      const filePath = paths[0];
-      
-      // Check if file is a markdown file
-      const isMarkdown = filePath.toLowerCase().endsWith('.md') || 
-                        filePath.toLowerCase().endsWith('.markdown') ||
-                        filePath.toLowerCase().endsWith('.mdx');
-      
-      if (!isMarkdown) {
-        alert("Please drop a markdown file (.md, .markdown, or .mdx)");
-        return;
-      }
+  const handleTauriDrop = useCallback(
+    async (paths: string[]) => {
+      if (paths && paths.length > 0) {
+        const filePath = paths[0]
 
-      try {
-        const content = await invoke<string>("read_file", { path: filePath });
-        setMarkdown(content);
-        setCurrentFile(filePath);
-        setIsDirty(false);
-        loadRecentFiles();
-      } catch (error) {
-        console.error("Failed to open file:", error);
-        alert("Failed to open file: " + error);
+        // Check if file is a markdown file
+        const isMarkdown =
+          filePath.toLowerCase().endsWith('.md') ||
+          filePath.toLowerCase().endsWith('.markdown') ||
+          filePath.toLowerCase().endsWith('.mdx')
+
+        if (!isMarkdown) {
+          showToast('Please drop a markdown file (.md, .markdown, or .mdx)', 'error')
+          return
+        }
+
+        try {
+          const content = await invoke<string>('read_file', { path: filePath })
+          setMarkdown(content)
+          setCurrentFile(filePath)
+          setIsDirty(false)
+          loadRecentFiles()
+          showToast(`Opened: ${filePath.split('/').pop()}`, 'success')
+        } catch (error) {
+          console.error('Failed to open file:', error)
+          showToast(`Failed to open file: ${error}`, 'error')
+        }
       }
-    }
-  }, []);
+    },
+    [showToast]
+  )
 
   // Set up Tauri drag-drop event listeners
   useEffect(() => {
-    const appWindow = getCurrentWindow();
-    
-    const unlistenDragEnter = appWindow.onDragDropEvent((event) => {
+    const appWindow = getCurrentWindow()
+
+    const unlistenDragEnter = appWindow.onDragDropEvent(event => {
       if (event.payload.type === 'enter') {
-        setIsDragging(true);
+        setIsDragging(true)
       } else if (event.payload.type === 'leave') {
-        setIsDragging(false);
+        setIsDragging(false)
       } else if (event.payload.type === 'drop') {
-        setIsDragging(false);
-        handleTauriDrop(event.payload.paths);
+        setIsDragging(false)
+        handleTauriDrop(event.payload.paths)
       }
-    });
+    })
 
     return () => {
-      unlistenDragEnter.then(fn => fn());
-    };
-  }, [handleTauriDrop]);
+      unlistenDragEnter.then(fn => fn())
+    }
+  }, [handleTauriDrop])
 
   // Set up dock drag-drop event listener (macOS)
   useEffect(() => {
     // Listen for dock-open-file event from Rust
-    const unlistenDockFile = listen<string>('dock-open-file', (event) => {
-      const filePath = event.payload;
+    const unlistenDockFile = listen<string>('dock-open-file', event => {
+      const filePath = event.payload
       if (filePath) {
         // Validate it's a markdown file
-        const isMarkdown = filePath.toLowerCase().endsWith('.md') || 
-                          filePath.toLowerCase().endsWith('.markdown') ||
-                          filePath.toLowerCase().endsWith('.mdx');
-        
+        const isMarkdown =
+          filePath.toLowerCase().endsWith('.md') ||
+          filePath.toLowerCase().endsWith('.markdown') ||
+          filePath.toLowerCase().endsWith('.mdx')
+
         if (isMarkdown) {
-          handleOpenRecentFile(filePath);
+          handleOpenRecentFile(filePath)
         } else {
-          alert("Please open a markdown file (.md, .markdown, or .mdx)");
+          showToast('Please open a markdown file (.md, .markdown, or .mdx)', 'error')
         }
       }
-    });
+    })
 
     return () => {
-      unlistenDockFile.then(fn => fn());
-    };
-  }, [handleOpenRecentFile]);
+      unlistenDockFile.then(fn => fn())
+    }
+  }, [handleOpenRecentFile, showToast])
 
   // HTML5 drag and drop handlers for visual feedback
   const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     // Prevent default to allow the Tauri native event to handle it
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
+
+  // Get toast icon based on type
+  const getToastIcon = (type: ToastType) => {
+    switch (type) {
+      case 'error':
+        return <AlertCircle size={20} />
+      case 'success':
+        return <CheckCircle size={20} />
+      case 'info':
+        return <Info size={20} />
+    }
+  }
 
   return (
-    <div 
+    <div
       className="app-container"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {/* Toast Notifications */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`toast toast-${toast.type}`}
+            onClick={() => removeToast(toast.id)}
+          >
+            {getToastIcon(toast.type)}
+            <span className="toast-message">{toast.message}</span>
+            <XCircle size={16} className="toast-close" />
+          </div>
+        ))}
+      </div>
+
       {/* Toolbar */}
       <div className="toolbar">
         <div className="toolbar-left">
           <h1 className="app-title">Markdown Editor</h1>
           {currentFile && (
             <span className="file-path">
-              {currentFile.split("/").pop()}{isDirty && " *"}
+              {currentFile.split('/').pop()}
+              {isDirty && ' *'}
             </span>
           )}
         </div>
         <div className="toolbar-actions">
           <ThemeToggle />
           <div className="toolbar-divider" />
-          
+
           {/* Recents Dropdown */}
           <div className="recents-dropdown" ref={recentsRef}>
-            <button 
-              onClick={() => setShowRecents(!showRecents)} 
-              className="btn btn-secondary" 
+            <button
+              onClick={() => setShowRecents(!showRecents)}
+              className="btn btn-secondary"
               title="Recent Files"
             >
               <Clock size={18} />
@@ -285,7 +373,7 @@ function App() {
               </div>
             )}
           </div>
-          
+
           <button onClick={handleNewFile} className="btn btn-secondary" title="New File">
             <FilePlus size={18} />
             <span>New</span>
@@ -318,10 +406,7 @@ function App() {
         {/* Preview Pane */}
         <div className="preview-pane">
           <div className="pane-header">Preview</div>
-          <div 
-            className="markdown-preview"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
+          <div className="markdown-preview" dangerouslySetInnerHTML={{ __html: html }} />
         </div>
       </div>
 
@@ -329,7 +414,7 @@ function App() {
       <div className="status-bar">
         <span>{markdown.length} characters</span>
         <span>{markdown.split(/\s+/).filter(w => w.length > 0).length} words</span>
-        <span>{isDirty ? "Unsaved" : "Saved"}</span>
+        <span>{isDirty ? 'Unsaved' : 'Saved'}</span>
       </div>
 
       {/* Drag and Drop Overlay */}
@@ -343,7 +428,7 @@ function App() {
         </div>
       )}
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
