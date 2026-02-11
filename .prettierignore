@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
+
+# Build outputs
+src-tauri/target/
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Config files that don't need formatting
+vite.config.ts
+vitest.config.ts
+tsconfig.json
+tsconfig.node.json
+
+# Test files (optional, depends on preference)
+# __tests__/
+
+# Other
+.DS_Store
+coverage/

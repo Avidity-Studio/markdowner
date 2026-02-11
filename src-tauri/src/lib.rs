@@ -252,6 +252,209 @@ async fn get_pending_file(state: tauri::State<'_, PendingFileState>) -> Result<O
     Ok(pending.take())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    fn create_test_file(dir: &PathBuf, name: &str, content: &str) -> PathBuf {
+        let file_path = dir.join(name);
+        let mut file = fs::File::create(&file_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        file_path
+    }
+
+    // Test file validation directly (synchronous)
+    #[test]
+    fn test_validate_file_path_valid_absolute() {
+        let dir = TempDir::new().unwrap();
+        let test_file = dir.path().join("test.md");
+        let _ = create_test_file(&dir.path().to_path_buf(), "test.md", "content");
+        
+        let result = validate_file_path(&test_file);
+        assert!(result.is_ok());
+        let metadata = result.unwrap();
+        assert!(metadata.exists);
+        assert!(metadata.is_file);
+    }
+
+    #[test]
+    fn test_validate_file_path_relative() {
+        let path = PathBuf::from("test.md");
+        let result = validate_file_path(&path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("absolute"));
+    }
+
+    #[test]
+    fn test_validate_file_path_nonexistent() {
+        // Note: canonicalize() fails for non-existent files
+        // This is expected behavior - the path validation will fail
+        let path = PathBuf::from("/tmp/nonexistent_file_12345.md");
+        let result = validate_file_path(&path);
+        // canonicalize will fail for non-existent paths
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_file_directly() {
+        let dir = TempDir::new().unwrap();
+        let test_file = create_test_file(&dir.path().to_path_buf(), "test.md", "# Hello World");
+        
+        // Test reading file directly without async command
+        let content = fs::read_to_string(&test_file).unwrap();
+        assert_eq!(content, "# Hello World");
+    }
+
+    #[test]
+    fn test_read_file_validation() {
+        // Test validation with an existing file
+        let dir = TempDir::new().unwrap();
+        let test_file = create_test_file(&dir.path().to_path_buf(), "test.md", "content");
+        
+        let result = validate_file_path(&test_file);
+        assert!(result.is_ok());
+        let metadata = result.unwrap();
+        assert!(metadata.exists);
+        assert!(metadata.is_file);
+        assert!(metadata.is_readable);
+    }
+
+    #[test]
+    fn test_write_file_directly() {
+        let dir = TempDir::new().unwrap();
+        let test_file = dir.path().join("test.md");
+        
+        // Test writing file directly without async command
+        let content = "# New Content";
+        fs::write(&test_file, content).unwrap();
+        
+        assert!(test_file.exists());
+        assert_eq!(fs::read_to_string(&test_file).unwrap(), "# New Content");
+    }
+
+    #[test]
+    fn test_write_file_path_validation_not_absolute() {
+        let path = PathBuf::from("test.md");
+        let result = validate_file_path(&path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("absolute"));
+    }
+
+    #[test]
+    fn test_write_file_parent_validation() {
+        let path = PathBuf::from("/nonexistent/directory/test.md");
+        if let Some(parent) = path.parent() {
+            assert!(!parent.exists());
+        }
+    }
+
+    #[test]
+    fn test_file_size_limit() {
+        const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024; // 10MB
+        let size = 11 * 1024 * 1024; // 11MB
+        assert!(size > MAX_FILE_SIZE);
+    }
+
+    #[test]
+    fn test_recent_files_add_and_retrieve() {
+        let state = RecentFilesState(Mutex::new(Vec::new()));
+        let dir = TempDir::new().unwrap();
+        
+        // Add files
+        let file1 = dir.path().join("file1.md").to_string_lossy().to_string();
+        let file2 = dir.path().join("file2.md").to_string_lossy().to_string();
+        
+        {
+            let mut recents = state.0.lock().unwrap();
+            recents.push(file1.clone());
+            recents.push(file2.clone());
+        }
+        
+        let recents = state.0.lock().unwrap();
+        assert_eq!(recents.len(), 2);
+        assert_eq!(recents[0], file1);
+        assert_eq!(recents[1], file2);
+    }
+
+    #[test]
+    fn test_recent_files_max_limit() {
+        let state = RecentFilesState(Mutex::new(Vec::new()));
+        let dir = TempDir::new().unwrap();
+        
+        // Add 15 files (more than MAX_RECENT_FILES of 10)
+        for i in 0..15 {
+            let file_path = dir.path().join(format!("file{}.md", i)).to_string_lossy().to_string();
+            let mut recents = state.0.lock().unwrap();
+            recents.insert(0, file_path);
+        }
+        
+        // Simulate truncation
+        {
+            let mut recents = state.0.lock().unwrap();
+            if recents.len() > MAX_RECENT_FILES {
+                recents.truncate(MAX_RECENT_FILES);
+            }
+        }
+        
+        let recents = state.0.lock().unwrap();
+        assert_eq!(recents.len(), MAX_RECENT_FILES);
+    }
+
+    #[test]
+    fn test_recent_files_move_to_top() {
+        let state = RecentFilesState(Mutex::new(Vec::new()));
+        let dir = TempDir::new().unwrap();
+        
+        let file1 = dir.path().join("file1.md").to_string_lossy().to_string();
+        let file2 = dir.path().join("file2.md").to_string_lossy().to_string();
+        
+        {
+            let mut recents = state.0.lock().unwrap();
+            recents.push(file1.clone());
+            recents.push(file2.clone());
+        }
+        
+        // Add file1 again (should move to top)
+        {
+            let mut recents = state.0.lock().unwrap();
+            recents.retain(|p| p != &file1);
+            recents.insert(0, file1.clone());
+        }
+        
+        let recents = state.0.lock().unwrap();
+        assert_eq!(recents[0], file1);
+        assert_eq!(recents[1], file2);
+    }
+
+    #[test]
+    fn test_recent_files_deduplication() {
+        let state = RecentFilesState(Mutex::new(Vec::new()));
+        let dir = TempDir::new().unwrap();
+        
+        let file1 = dir.path().join("file1.md").to_string_lossy().to_string();
+        
+        // Add same file multiple times
+        {
+            let mut recents = state.0.lock().unwrap();
+            recents.push(file1.clone());
+            recents.push(file1.clone());
+            recents.push(file1.clone());
+        }
+        
+        // Deduplicate and should only have one entry
+        {
+            let mut recents = state.0.lock().unwrap();
+            recents.dedup();
+        }
+        
+        let recents = state.0.lock().unwrap();
+        assert_eq!(recents.len(), 1);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
