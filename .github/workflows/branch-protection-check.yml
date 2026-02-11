@@ -1,0 +1,79 @@
+name: Branch Protection Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  pull-requests: read
+  statuses: write
+
+jobs:
+  check-branch-protection:
+    name: Verify Branch Protection Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch protection
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.pull_request?.base.ref || 'main';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            
+            core.info(`Checking branch protection for: ${branch}`);
+            
+            // Get branch protection rules
+            const protection = await github.rest.repos.getBranchProtection({
+              owner,
+              repo,
+              branch,
+            }).catch(() => null);
+            
+            if (!protection) {
+              core.setFailed(`❌ Branch '${branch}' has no protection rules!`);
+              return;
+            }
+            
+            const checks = protection.data.required_status_checks?.contexts || [];
+            const requiredChecks = [
+              "Lint & Format Check",
+              "Frontend Tests",
+              "Rust Tests",
+              "TypeScript Type Check",
+              "Build macOS (Apple Silicon)"
+            ];
+            
+            const missingChecks = requiredChecks.filter(
+              check => !checks.includes(check)
+            );
+            
+            if (missingChecks.length > 0) {
+              core.setFailed(`❌ Missing required status checks: ${missingChecks.join(', ')}`);
+            } else {
+              core.info('✅ All required status checks are configured');
+            }
+            
+            // Check if strict mode is enabled
+            const strict = protection.data.required_status_checks?.strict;
+            if (strict) {
+              core.info('✅ Strict mode is enabled (branches must be up to date)');
+            } else {
+              core.warning('⚠️ Strict mode is not enabled');
+            }
+            
+            // Check if admins are enforced
+            const enforceAdmins = protection.data.enforce_admins?.enabled;
+            if (enforceAdmins) {
+              core.info('✅ Admin enforcement is enabled');
+            } else {
+              core.warning('⚠️ Admin enforcement is not enabled');
+            }
+            
+            // Display all configured checks
+            core.info(`\nConfigured status checks (${checks.length}):`);
+            checks.forEach((check, index) => {
+              core.info(`  ${index + 1}. ${check}`);
+            });
