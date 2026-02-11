@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 #[cfg(target_os = "macos")]
@@ -31,7 +31,7 @@ struct FileMetadata {
 }
 
 // Validate and get file metadata
-fn validate_file_path(path: &PathBuf) -> Result<FileMetadata, String> {
+fn validate_file_path(path: &Path) -> Result<FileMetadata, String> {
   // Check if path is absolute
   if !path.is_absolute() {
     return Err("File path must be absolute".to_string());
@@ -104,7 +104,7 @@ fn save_recent_files_to_store(app: &AppHandle, files: &[String]) {
 
 // Read file content
 #[tauri::command]
-async fn read_file(app: AppHandle, path: String) -> Result<String, String> {
+async fn read_file(_app: AppHandle, path: String) -> Result<String, String> {
   let path = PathBuf::from(&path);
 
   // Validate the file path
@@ -138,7 +138,7 @@ async fn read_file(app: AppHandle, path: String) -> Result<String, String> {
 
 // Write file content
 #[tauri::command]
-async fn write_file(app: AppHandle, path: String, content: String) -> Result<(), String> {
+async fn write_file(_app: AppHandle, path: String, content: String) -> Result<(), String> {
   let path = PathBuf::from(&path);
 
   // Validate the path is absolute
@@ -147,10 +147,8 @@ async fn write_file(app: AppHandle, path: String, content: String) -> Result<(),
   }
 
   // If file exists, validate it's a file and writable
-  if path.exists() {
-    if !path.is_file() {
-      return Err("Path is not a file".to_string());
-    }
+  if path.exists() && !path.is_file() {
+    return Err("Path is not a file".to_string());
   }
 
   // Validate parent directory exists
@@ -287,6 +285,52 @@ async fn get_pending_file(
   Ok(pending.take())
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+  tauri::Builder::default()
+    .plugin(tauri_plugin_fs::init())
+    .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_deep_link::init())
+    .plugin(tauri_plugin_store::Builder::default().build())
+    .setup(|app| {
+      // Load recent files from persistent store
+      let recent_files = load_recent_files_from_store(app.handle());
+      app.manage(RecentFilesState(Mutex::new(recent_files)));
+      app.manage(PendingFileState(Mutex::new(None)));
+
+      // Handle files opened via dock drag-drop on macOS
+      #[cfg(target_os = "macos")]
+      {
+        let app_handle = app.handle().clone();
+
+        // Listen for open-file events from the dock
+        // This handles files dropped on the dock icon both when app is running and not running
+        let _ = app.deep_link().on_open_url(move |event| {
+          // The URL will be file://path/to/file
+          let url = &event.urls()[0];
+          if let Ok(path) = url.to_file_path() {
+            let path_str = path.to_string_lossy().to_string();
+            let _ = app_handle.emit(DOCK_OPEN_FILE_EVENT, path_str);
+          }
+        });
+      }
+
+      Ok(())
+    })
+    .invoke_handler(tauri::generate_handler![
+      read_file,
+      write_file,
+      open_file_dialog,
+      save_file_dialog,
+      get_recent_files,
+      add_to_recents,
+      clear_recent_files,
+      get_pending_file
+    ])
+    .run(tauri::generate_context!())
+    .expect("error while running tauri application");
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -294,7 +338,7 @@ mod tests {
   use std::io::Write;
   use tempfile::TempDir;
 
-  fn create_test_file(dir: &PathBuf, name: &str, content: &str) -> PathBuf {
+  fn create_test_file(dir: &Path, name: &str, content: &str) -> PathBuf {
     let file_path = dir.join(name);
     let mut file = fs::File::create(&file_path).unwrap();
     file.write_all(content.as_bytes()).unwrap();
@@ -492,50 +536,4 @@ mod tests {
     let recents = state.0.lock().unwrap();
     assert_eq!(recents.len(), 1);
   }
-}
-
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-  tauri::Builder::default()
-    .plugin(tauri_plugin_fs::init())
-    .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_deep_link::init())
-    .plugin(tauri_plugin_store::Builder::default().build())
-    .setup(|app| {
-      // Load recent files from persistent store
-      let recent_files = load_recent_files_from_store(app.handle());
-      app.manage(RecentFilesState(Mutex::new(recent_files)));
-      app.manage(PendingFileState(Mutex::new(None)));
-
-      // Handle files opened via dock drag-drop on macOS
-      #[cfg(target_os = "macos")]
-      {
-        let app_handle = app.handle().clone();
-
-        // Listen for open-file events from the dock
-        // This handles files dropped on the dock icon both when app is running and not running
-        let _ = app.deep_link().on_open_url(move |event| {
-          // The URL will be file://path/to/file
-          let url = &event.urls()[0];
-          if let Ok(path) = url.to_file_path() {
-            let path_str = path.to_string_lossy().to_string();
-            let _ = app_handle.emit(DOCK_OPEN_FILE_EVENT, path_str);
-          }
-        });
-      }
-
-      Ok(())
-    })
-    .invoke_handler(tauri::generate_handler![
-      read_file,
-      write_file,
-      open_file_dialog,
-      save_file_dialog,
-      get_recent_files,
-      add_to_recents,
-      clear_recent_files,
-      get_pending_file
-    ])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
 }
