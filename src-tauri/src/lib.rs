@@ -350,7 +350,7 @@ mod tests {
   fn test_validate_file_path_valid_absolute() {
     let dir = TempDir::new().unwrap();
     let test_file = dir.path().join("test.md");
-    let _ = create_test_file(&dir.path().to_path_buf(), "test.md", "content");
+    let _ = create_test_file(dir.path(), "test.md", "content");
 
     let result = validate_file_path(&test_file);
     assert!(result.is_ok());
@@ -380,7 +380,7 @@ mod tests {
   #[test]
   fn test_read_file_directly() {
     let dir = TempDir::new().unwrap();
-    let test_file = create_test_file(&dir.path().to_path_buf(), "test.md", "# Hello World");
+    let test_file = create_test_file(dir.path(), "test.md", "# Hello World");
 
     // Test reading file directly without async command
     let content = fs::read_to_string(&test_file).unwrap();
@@ -391,7 +391,7 @@ mod tests {
   fn test_read_file_validation() {
     // Test validation with an existing file
     let dir = TempDir::new().unwrap();
-    let test_file = create_test_file(&dir.path().to_path_buf(), "test.md", "content");
+    let test_file = create_test_file(dir.path(), "test.md", "content");
 
     let result = validate_file_path(&test_file);
     assert!(result.is_ok());
