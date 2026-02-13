@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { listen } from '@tauri-apps/api/event'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import { useMermaid } from './hooks/useMermaid'
+import { renderMarkdownToHtml } from './utils/markdown'
 import {
   FolderOpen,
   Save,
@@ -30,7 +30,7 @@ interface Toast {
 
 function App() {
   const [markdown, setMarkdown] = useState<string>(
-    '# Welcome to Markdown Editor\n\nStart typing your markdown here...\n\n## Features\n\n- **Live preview** - See your changes in real-time\n- **File operations** - Open and save markdown files\n- **Drag & drop** - Drop markdown files to open them\n- **Clean interface** - Focus on your writing\n\n> Tip: Use the toolbar buttons to open or save files, or drag and drop a markdown file onto the window!'
+    '# Welcome to Markdown Editor\n\nStart typing your markdown here...\n\n## Features\n\n- **Live preview** - See your changes in real-time\n- **File operations** - Open and save markdown files\n- **Drag & drop** - Drop markdown files to open them\n- **Mermaid diagrams** - Render flowcharts and diagrams\n- **Syntax highlighting** - Code blocks with GitHub-style highlighting\n- **Clean interface** - Focus on your writing\n\n## Code Example\n\n```typescript\n// Example TypeScript code with syntax highlighting\ninterface User {\n  id: number;\n  name: string;\n  email: string;\n}\n\nfunction greetUser(user: User): string {\n  return `Hello, ${user.name}!`;\n}\n\nconst user: User = {\n  id: 1,\n  name: "Alice",\n  email: "alice@example.com"\n};\n\nconsole.log(greetUser(user));\n```\n\n## Mermaid Diagram Example\n\n```mermaid\nflowchart TD\n    A[Start] --> B{Is it working?}\n    B -->|Yes| C[Great!]\n    B -->|No| D[Debug]\n    D --> B\n    C --> E[Deploy]\n```\n\n> Tip: Use the toolbar buttons to open or save files, or drag and drop a markdown file onto the window!'
   )
   const [currentFile, setCurrentFile] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
@@ -43,16 +43,19 @@ function App() {
 
   // Debounced markdown rendering with sanitization
   const [html, setHtml] = useState<string>('')
+  const previewRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const renderMarkdown = async () => {
-      const rawHtml = await marked.parse(markdown)
-      // Sanitize HTML to prevent XSS attacks
-      const sanitizedHtml = DOMPurify.sanitize(rawHtml)
+      // Use our custom renderer with mermaid support
+      const sanitizedHtml = await renderMarkdownToHtml(markdown)
       setHtml(sanitizedHtml)
     }
     renderMarkdown()
   }, [markdown])
+
+  // Render mermaid diagrams after HTML is set
+  useMermaid(previewRef, html)
 
   // Toast notification helper
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
@@ -487,7 +490,11 @@ function App() {
         {/* Preview Pane */}
         <div className="preview-pane">
           <div className="pane-header">Preview</div>
-          <div className="markdown-preview" dangerouslySetInnerHTML={{ __html: html }} />
+          <div
+            ref={previewRef}
+            className="markdown-preview"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
         </div>
       </div>
 

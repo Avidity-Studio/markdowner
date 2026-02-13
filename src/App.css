@@ -314,17 +314,134 @@ body,
 }
 
 .markdown-preview pre {
-  background-color: #1f2937;
+  background-color: #f6f8fa;
   padding: 16px;
   border-radius: 6px;
   overflow-x: auto;
   margin: 16px 0;
+  border: 1px solid #d0d7de;
 }
 
 .markdown-preview pre code {
   background-color: transparent;
-  color: #e5e7eb;
+  color: #24292f;
   padding: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Light mode - Syntax Highlighting (GitHub Light) */
+.markdown-preview pre code.hljs {
+  background-color: transparent;
+  color: #24292f;
+}
+
+.markdown-preview .hljs-comment,
+.markdown-preview .hljs-punctuation {
+  color: #6e7781;
+}
+
+.markdown-preview .hljs-tag,
+.markdown-preview .hljs-doctag {
+  color: #116329;
+}
+
+.markdown-preview .hljs-keyword,
+.markdown-preview .hljs-attribute,
+.markdown-preview .hljs-selector-tag,
+.markdown-preview .hljs-meta .hljs-keyword,
+.markdown-preview .hljs-attr,
+.markdown-preview .hljs-operator {
+  color: #cf222e;
+}
+
+.markdown-preview .hljs-variable,
+.markdown-preview .hljs-template-variable,
+.markdown-preview .hljs-type,
+.markdown-preview .hljs-selector-class,
+.markdown-preview .hljs-selector-attr,
+.markdown-preview .hljs-selector-pseudo {
+  color: #953800;
+}
+
+.markdown-preview .hljs-number,
+.markdown-preview .hljs-symbol,
+.markdown-preview .hljs-bullet,
+.markdown-preview .hljs-link,
+.markdown-preview .hljs-meta,
+.markdown-preview .hljs-selector-id,
+.markdown-preview .hljs-title {
+  color: #0550ae;
+}
+
+.markdown-preview .hljs-string,
+.markdown-preview .hljs-regexp,
+.markdown-preview .hljs-addition,
+.markdown-preview .hljs-built_in,
+.markdown-preview .hljs-literal {
+  color: #0a3069;
+}
+
+.markdown-preview .hljs-section,
+.markdown-preview .hljs-name,
+.markdown-preview .hljs-selector-tag,
+.markdown-preview .hljs-deletion,
+.markdown-preview .hljs-subst {
+  color: #116329;
+}
+
+.markdown-preview .hljs-function .hljs-title,
+.markdown-preview .hljs-class .hljs-title {
+  color: #8250df;
+}
+
+.markdown-preview .hljs-params {
+  color: #24292f;
+}
+
+.markdown-preview .hljs-property,
+.markdown-preview .hljs-attr {
+  color: #0550ae;
+}
+
+.markdown-preview .hljs-literal,
+.markdown-preview .hljs-number {
+  color: #0550ae;
+}
+
+.markdown-preview .hljs-emphasis {
+  font-style: italic;
+}
+
+.markdown-preview .hljs-strong {
+  font-weight: bold;
+}
+
+.markdown-preview .hljs-link {
+  text-decoration: underline;
+}
+
+/* Code block language label */
+.markdown-preview pre {
+  position: relative;
+}
+
+.markdown-preview pre[class*="language-"]::before,
+.markdown-preview pre:has(code[class*="language-"])::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #6e7781;
+  background-color: #f6f8fa;
+  border-bottom-left-radius: 6px;
+  border-left: 1px solid #d0d7de;
+  border-bottom: 1px solid #d0d7de;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .markdown-preview strong {
@@ -539,6 +656,97 @@ body,
 .dark .markdown-preview code {
   background-color: #374151;
   color: #f472b6;
+}
+
+/* Dark mode - Syntax Highlighting (GitHub Dark) */
+.dark .markdown-preview pre code.hljs {
+  background-color: transparent;
+  color: #c9d1d9;
+}
+
+.dark .hljs-comment,
+.dark .hljs-punctuation {
+  color: #8b949e;
+}
+
+.dark .hljs-tag,
+.dark .hljs-doctag {
+  color: #7ee787;
+}
+
+.dark .hljs-keyword,
+.dark .hljs-attribute,
+.dark .hljs-selector-tag,
+.dark .hljs-meta .hljs-keyword,
+.dark .hljs-attr,
+.dark .hljs-operator {
+  color: #ff7b72;
+}
+
+.dark .hljs-variable,
+.dark .hljs-template-variable,
+.dark .hljs-type,
+.dark .hljs-selector-class,
+.dark .hljs-selector-attr,
+.dark .hljs-selector-pseudo {
+  color: #ffa657;
+}
+
+.dark .hljs-number,
+.dark .hljs-symbol,
+.dark .hljs-bullet,
+.dark .hljs-link,
+.dark .hljs-meta,
+.dark .hljs-selector-id,
+.dark .hljs-title {
+  color: #79c0ff;
+}
+
+.dark .hljs-string,
+.dark .hljs-regexp,
+.dark .hljs-addition,
+.dark .hljs-built_in,
+.dark .hljs-literal {
+  color: #a5d6ff;
+}
+
+.dark .hljs-section,
+.dark .hljs-name,
+.dark .hljs-selector-tag,
+.dark .hljs-deletion,
+.dark .hljs-subst {
+  color: #7ee787;
+}
+
+.dark .hljs-function .hljs-title,
+.dark .hljs-class .hljs-title {
+  color: #d2a8ff;
+}
+
+.dark .hljs-params {
+  color: #c9d1d9;
+}
+
+.dark .hljs-property,
+.dark .hljs-attr {
+  color: #79c0ff;
+}
+
+.dark .hljs-literal,
+.dark .hljs-number {
+  color: #79c0ff;
+}
+
+.dark .hljs-emphasis {
+  font-style: italic;
+}
+
+.dark .hljs-strong {
+  font-weight: bold;
+}
+
+.dark .hljs-link {
+  text-decoration: underline;
 }
 
 .dark .markdown-preview strong {
@@ -786,4 +994,160 @@ body,
 
 .dark .toast-close {
   color: currentColor;
+}
+
+/* ================================
+   MERMAID DIAGRAMS
+   ================================ */
+
+.mermaid-container {
+  margin: 16px 0;
+  padding: 16px;
+  background-color: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  overflow-x: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Error state for failed mermaid renders */
+.mermaid-error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.mermaid-error code {
+  color: #dc2626;
+}
+
+/* Dark mode - Mermaid diagrams */
+.dark .mermaid-container {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+/* Enhance mermaid diagram text contrast in dark mode */
+.dark .mermaid-container svg text {
+  fill: #f3f4f6 !important;
+}
+
+/* Ensure mermaid edges/arrows are visible in dark mode */
+.dark .mermaid-container svg .edgeLabel text {
+  fill: #f3f4f6 !important;
+  background-color: #1f2937 !important;
+}
+
+/* Node labels with better contrast */
+.dark .mermaid-container svg .nodeLabel {
+  fill: #f3f4f6 !important;
+}
+
+/* Cluster/ subgraph labels */
+.dark .mermaid-container svg .cluster text {
+  fill: #d1d5db !important;
+}
+
+/* Flowchart specific styles for dark mode */
+.dark .mermaid-container svg .flowchart-link {
+  stroke: #9ca3af !important;
+}
+
+/* Timeline diagram specific styles */
+.dark .mermaid-container svg .timeline-text {
+  fill: #f3f4f6 !important;
+}
+
+/* Gantt chart specific styles */
+.dark .mermaid-container svg .sectionTitle {
+  fill: #f3f4f6 !important;
+}
+
+.dark .mermaid-container svg .taskText {
+  fill: #f3f4f6 !important;
+}
+
+/* Pie chart labels */
+.dark .mermaid-container svg .pieTitleText {
+  fill: #f3f4f6 !important;
+}
+
+.dark .mermaid-container svg .pieSliceText {
+  fill: #1f2937 !important;
+}
+
+/* Sequence diagram actor labels */
+.dark .mermaid-container svg .actor text {
+  fill: #f3f4f6 !important;
+}
+
+/* Class diagram labels */
+.dark .mermaid-container svg .classTitle {
+  fill: #f3f4f6 !important;
+}
+
+.dark .mermaid-container svg .classLabel {
+  fill: #d1d5db !important;
+}
+
+/* State diagram labels */
+.dark .mermaid-container svg .stateLabel {
+  fill: #f3f4f6 !important;
+}
+
+/* ER diagram labels */
+.dark .mermaid-container svg .entityLabel {
+  fill: #f3f4f6 !important;
+}
+
+/* User journey labels */
+.dark .mermaid-container svg .journey-title {
+  fill: #f3f4f6 !important;
+}
+
+.dark .mermaid-container svg .journey-section {
+  fill: #d1d5db !important;
+}
+
+/* Mindmap labels */
+.dark .mermaid-container svg .mindmap-node text {
+  fill: #f3f4f6 !important;
+}
+
+/* Git graph labels */
+.dark .mermaid-container svg .gitBranchLabel {
+  fill: #f3f4f6 !important;
+}
+
+/* Error state for dark mode */
+.dark .mermaid-error {
+  background-color: #450a0a;
+  border-color: #7f1d1d;
+}
+
+.dark .mermaid-error code {
+  color: #fca5a5;
+}
+
+/* Dark mode - Code block styling */
+.dark .markdown-preview pre {
+  background-color: #161b22;
+  border-color: #30363d;
+}
+
+.dark .markdown-preview pre code {
+  color: #c9d1d9;
+}
+
+.dark .markdown-preview pre[class*="language-"]::before,
+.dark .markdown-preview pre:has(code[class*="language-"])::before {
+  color: #8b949e;
+  background-color: #161b22;
+  border-left-color: #30363d;
+  border-bottom-color: #30363d;
 }
