@@ -68,7 +68,7 @@ function App() {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
-  // Load recent files on mount
+  // Load recent files on mount and check for pending file (opened via file association)
   useEffect(() => {
     loadRecentFiles()
   }, [])
@@ -144,6 +144,39 @@ function App() {
     [showToast]
   )
 
+  // Check for pending file (when app is opened via file association)
+  // This is in a separate useEffect to ensure handleOpenRecentFile is up to date
+  useEffect(() => {
+    const checkPendingFile = async () => {
+      try {
+        const pendingFile = await invoke<string | null>('get_pending_file')
+        if (pendingFile) {
+          console.log('Pending file found:', pendingFile)
+          // Validate it's a markdown file
+          const isMarkdown =
+            pendingFile.toLowerCase().endsWith('.md') ||
+            pendingFile.toLowerCase().endsWith('.markdown') ||
+            pendingFile.toLowerCase().endsWith('.mdx')
+
+          if (isMarkdown) {
+            await handleOpenRecentFile(pendingFile)
+          } else {
+            showToast('Please open a markdown file (.md, .markdown, or .mdx)', 'error')
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check for pending file:', error)
+      }
+    }
+
+    // Small delay to ensure the app is fully initialized
+    const timer = setTimeout(() => {
+      checkPendingFile()
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [handleOpenRecentFile, showToast])
+
   const handleSaveFile = useCallback(async () => {
     try {
       let filePath = currentFile
@@ -162,6 +195,22 @@ function App() {
       showToast(`Failed to save file: ${error}`, 'error')
     }
   }, [currentFile, markdown, showToast])
+
+  const handleSaveAsFile = useCallback(async () => {
+    try {
+      const filePath = await invoke<string | null>('save_file_dialog')
+      if (filePath) {
+        await invoke('write_file', { path: filePath, content: markdown })
+        setCurrentFile(filePath)
+        setIsDirty(false)
+        loadRecentFiles()
+        showToast(`Saved: ${filePath.split('/').pop()}`, 'success')
+      }
+    } catch (error) {
+      console.error('Failed to save file:', error)
+      showToast(`Failed to save file: ${error}`, 'error')
+    }
+  }, [markdown, showToast])
 
   const handleClearRecents = useCallback(async () => {
     try {
@@ -240,6 +289,7 @@ function App() {
   useEffect(() => {
     // Listen for dock-open-file event from Rust
     const unlistenDockFile = listen<string>('dock-open-file', event => {
+      console.log('Received dock-open-file event:', event.payload)
       const filePath = event.payload
       if (filePath) {
         // Validate it's a markdown file
@@ -260,6 +310,37 @@ function App() {
       unlistenDockFile.then(fn => fn())
     }
   }, [handleOpenRecentFile, showToast])
+
+  // Deep-link events are handled by the Rust backend which emits 'dock-open-file'
+  // The backend properly decodes file:// URLs including percent-encoded characters
+  // See src-tauri/src/lib.rs for the deep-link handling logic
+
+  // Set up menu event listeners
+  useEffect(() => {
+    // Listen for menu events from the native menu bar
+    const unlistenNewFile = listen<void>('menu-new-file', () => {
+      handleNewFile()
+    })
+
+    const unlistenOpenFile = listen<void>('menu-open-file', () => {
+      handleOpenFile()
+    })
+
+    const unlistenSaveFile = listen<void>('menu-save-file', () => {
+      handleSaveFile()
+    })
+
+    const unlistenSaveAsFile = listen<void>('menu-save-as-file', () => {
+      handleSaveAsFile()
+    })
+
+    return () => {
+      unlistenNewFile.then(fn => fn())
+      unlistenOpenFile.then(fn => fn())
+      unlistenSaveFile.then(fn => fn())
+      unlistenSaveAsFile.then(fn => fn())
+    }
+  }, [handleNewFile, handleOpenFile, handleSaveFile, handleSaveAsFile])
 
   // HTML5 drag and drop handlers for visual feedback
   const handleDragEnter = useCallback((e: React.DragEvent) => {

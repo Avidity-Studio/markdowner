@@ -1,10 +1,36 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
-#[cfg(target_os = "macos")]
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_store::StoreExt;
+use urlencoding::decode;
+
+/// Convert a file:// URL to a local file path
+/// Handles percent-encoding and platform-specific path formats
+fn file_url_to_path(url: &str) -> Option<String> {
+  if !url.starts_with("file://") {
+    return None;
+  }
+
+  // Remove the file:// prefix
+  let path_part = &url[7..];
+
+  // Decode percent-encoded characters (e.g., %20 -> space)
+  match decode(path_part) {
+    Ok(decoded) => {
+      let path_str = decoded.into_owned();
+      // On macOS, file URLs often have an extra leading slash that needs to be removed
+      // e.g., file:///Users/name/file.md -> /Users/name/file.md
+      Some(path_str)
+    }
+    Err(e) => {
+      eprintln!("Failed to decode URL: {}", e);
+      None
+    }
+  }
+}
 
 // Maximum number of recent files to keep
 const MAX_RECENT_FILES: usize = 10;
@@ -21,6 +47,121 @@ pub struct PendingFileState(pub Mutex<Option<String>>);
 
 // Event name for file open from dock
 const DOCK_OPEN_FILE_EVENT: &str = "dock-open-file";
+
+// Event names for menu actions
+const MENU_NEW_FILE_EVENT: &str = "menu-new-file";
+const MENU_OPEN_FILE_EVENT: &str = "menu-open-file";
+const MENU_SAVE_FILE_EVENT: &str = "menu-save-file";
+const MENU_SAVE_AS_FILE_EVENT: &str = "menu-save-as-file";
+
+// Create the application menu
+fn create_app_menu(app_handle: &AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
+  let menu = Menu::new(app_handle)?;
+  
+  // App menu (required on macOS as the first menu)
+  let about_item = PredefinedMenuItem::about(app_handle, Some("About Markdowner"), None)?;
+  let separator_app = PredefinedMenuItem::separator(app_handle)?;
+  let quit_item = PredefinedMenuItem::quit(app_handle, Some("Quit Markdowner"))?;
+  
+  let app_submenu = Submenu::with_items(
+    app_handle,
+    "Markdowner",
+    true,
+    &[
+      &about_item,
+      &separator_app,
+      &quit_item,
+    ],
+  )?;
+  
+  // File menu items
+  let new_item = MenuItem::with_id(app_handle, "new_file", "New", true, Some("CmdOrCtrl+N"))?;
+  let open_item = MenuItem::with_id(app_handle, "open_file", "Open...", true, Some("CmdOrCtrl+O"))?;
+  let save_item = MenuItem::with_id(app_handle, "save_file", "Save", true, Some("CmdOrCtrl+S"))?;
+  let save_as_item = MenuItem::with_id(app_handle, "save_as_file", "Save As...", true, Some("CmdOrCtrl+Shift+S"))?;
+  let separator1 = PredefinedMenuItem::separator(app_handle)?;
+  let separator2 = PredefinedMenuItem::separator(app_handle)?;
+  let close_item = PredefinedMenuItem::close_window(app_handle, Some("Close Window"))?;
+  
+  let file_submenu = Submenu::with_items(
+    app_handle,
+    "File",
+    true,
+    &[
+      &new_item,
+      &open_item,
+      &separator1,
+      &save_item,
+      &save_as_item,
+      &separator2,
+      &close_item,
+    ],
+  )?;
+  
+  // Edit menu
+  let undo_item = PredefinedMenuItem::undo(app_handle, None)?;
+  let redo_item = PredefinedMenuItem::redo(app_handle, None)?;
+  let separator3 = PredefinedMenuItem::separator(app_handle)?;
+  let cut_item = PredefinedMenuItem::cut(app_handle, None)?;
+  let copy_item = PredefinedMenuItem::copy(app_handle, None)?;
+  let paste_item = PredefinedMenuItem::paste(app_handle, None)?;
+  let select_all_item = PredefinedMenuItem::select_all(app_handle, None)?;
+  
+  let edit_submenu = Submenu::with_items(
+    app_handle,
+    "Edit",
+    true,
+    &[
+      &undo_item,
+      &redo_item,
+      &separator3,
+      &cut_item,
+      &copy_item,
+      &paste_item,
+      &select_all_item,
+    ],
+  )?;
+  
+  // Window menu
+  let minimize_item = PredefinedMenuItem::minimize(app_handle, Some("Minimize"))?;
+  let close_item_win = PredefinedMenuItem::close_window(app_handle, Some("Close Window"))?;
+  
+  let window_submenu = Submenu::with_items(
+    app_handle,
+    "Window",
+    true,
+    &[
+      &minimize_item,
+      &close_item_win,
+    ],
+  )?;
+  
+  menu.append(&app_submenu)?;
+  menu.append(&file_submenu)?;
+  menu.append(&edit_submenu)?;
+  menu.append(&window_submenu)?;
+  
+  Ok(menu)
+}
+
+// Handle menu events
+fn handle_menu_event(app_handle: &AppHandle, id: &str) {
+  match id {
+    "new_file" => {
+      let _ = app_handle.emit(MENU_NEW_FILE_EVENT, ());
+    }
+    "open_file" => {
+      let _ = app_handle.emit(MENU_OPEN_FILE_EVENT, ());
+    }
+    "save_file" => {
+      let _ = app_handle.emit(MENU_SAVE_FILE_EVENT, ());
+    }
+    "save_as_file" => {
+      let _ = app_handle.emit(MENU_SAVE_AS_FILE_EVENT, ());
+    }
+    _ => {}
+  }
+}
 
 // File metadata for validation
 #[derive(Debug)]
@@ -282,7 +423,25 @@ async fn get_pending_file(
   state: tauri::State<'_, PendingFileState>,
 ) -> Result<Option<String>, String> {
   let mut pending = state.0.lock().unwrap();
-  Ok(pending.take())
+  let result = pending.take();
+  println!("get_pending_file called, returning: {:?}", result);
+  Ok(result)
+}
+
+// Command to set pending file (used when receiving file-open events)
+#[tauri::command]
+async fn set_pending_file(
+  app: AppHandle,
+  state: tauri::State<'_, PendingFileState>,
+  path: String,
+) -> Result<(), String> {
+  println!("set_pending_file called with: {}", path);
+  let mut pending = state.0.lock().unwrap();
+  *pending = Some(path);
+  
+  // Also emit event for frontend
+  let _ = app.emit(DOCK_OPEN_FILE_EVENT, pending.clone().unwrap());
+  Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -290,32 +449,101 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_store::Builder::default().build())
+    .plugin(tauri_plugin_deep_link::init())
     .setup(|app| {
+      // Create and set the menu
+      let menu = create_app_menu(app.handle())?;
+      app.set_menu(menu)?;
       // Load recent files from persistent store
       let recent_files = load_recent_files_from_store(app.handle());
       app.manage(RecentFilesState(Mutex::new(recent_files)));
       app.manage(PendingFileState(Mutex::new(None)));
 
-      // Handle files opened via dock drag-drop on macOS
-      #[cfg(target_os = "macos")]
+      // Handle files opened via file association (clicking on .md files)
+      // This uses the deep-link plugin which is more reliable than tauri://file-open
       {
         let app_handle = app.handle().clone();
-
-        // Listen for open-file events from the dock
-        // This handles files dropped on the dock icon both when app is running and not running
+        
+        println!("Setting up deep-link handler for file associations");
+        
+        // Get any pending files (when app was opened with a file)
+        if let Ok(Some(pending_urls)) = app.deep_link().get_current() {
+          if !pending_urls.is_empty() {
+            for url in &pending_urls {
+              let url_str = url.to_string();
+              println!("App was opened with deep link/URL: {}", url_str);
+              
+              // Parse file:// URL to get the path
+              if url_str.starts_with("file://") {
+                let path = file_url_to_path(&url_str).unwrap_or_else(|| {
+                  println!("Failed to parse file URL: {}", url_str);
+                  String::new()
+                });
+                if path.is_empty() {
+                  continue;
+                }
+                println!("Extracted path from deep link: {}", path);
+                
+                // Store in pending state
+                if let Some(pending_state) = app_handle.try_state::<PendingFileState>() {
+                  let mut pending = pending_state.0.lock().unwrap();
+                  *pending = Some(path.clone());
+                  println!("Stored in pending state from deep link: {}", path);
+                }
+                
+                // Also emit event for when app is already running
+                let _ = app_handle.emit(DOCK_OPEN_FILE_EVENT, path);
+                // Only process the first file for now
+                break;
+              }
+            }
+          } else {
+            println!("No deep link/URL available at startup");
+          }
+        } else {
+          println!("No deep link/URL available at startup");
+        }
+        
+        // Listen for deep link events (when app is already running and user clicks a file)
         let _ = app.deep_link().on_open_url(move |event| {
-          // The URL will be file://path/to/file
-          let url = &event.urls()[0];
-          if let Ok(path) = url.to_file_path() {
-            let path_str = path.to_string_lossy().to_string();
-            let _ = app_handle.emit(DOCK_OPEN_FILE_EVENT, path_str);
+          let urls = event.urls();
+          println!("Received deep link event with {} URLs", urls.len());
+          
+          for url in urls {
+            let url_str = url.to_string();
+            println!("Processing URL: {}", url_str);
+            
+            if url_str.starts_with("file://") {
+              let path = file_url_to_path(&url_str).unwrap_or_else(|| {
+                println!("Failed to parse file URL: {}", url_str);
+                String::new()
+              });
+              if path.is_empty() {
+                continue;
+              }
+              println!("Extracted path from URL: {}", path);
+              
+              // Store in pending state
+              if let Some(pending_state) = app_handle.try_state::<PendingFileState>() {
+                let mut pending = pending_state.0.lock().unwrap();
+                *pending = Some(path.clone());
+                println!("Stored in pending state: {}", path);
+              }
+              
+              // Emit event to frontend
+              let _ = app_handle.emit(DOCK_OPEN_FILE_EVENT, path);
+              // Only process the first file for now
+              break;
+            }
           }
         });
       }
 
       Ok(())
+    })
+    .on_menu_event(|app_handle, event| {
+      handle_menu_event(app_handle, &event.id().0);
     })
     .invoke_handler(tauri::generate_handler![
       read_file,
@@ -325,7 +553,8 @@ pub fn run() {
       get_recent_files,
       add_to_recents,
       clear_recent_files,
-      get_pending_file
+      get_pending_file,
+      set_pending_file
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
