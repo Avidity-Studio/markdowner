@@ -30,8 +30,7 @@ describe('useMermaid', () => {
   it('should process mermaid code blocks', async () => {
     // Create a container with a mermaid code block
     const container = document.createElement('div')
-    container.innerHTML =
-      '<pre><code class="language-mermaid">flowchart TD\nA --> B</code></pre>'
+    container.innerHTML = '<pre><code class="language-mermaid">flowchart TD\nA --> B</code></pre>'
     document.body.appendChild(container)
 
     const TestComponent = () => {
@@ -43,7 +42,7 @@ describe('useMermaid', () => {
     renderHook(() => TestComponent())
 
     // Wait for the async render
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await new Promise(resolve => setTimeout(resolve, 100))
 
     // Cleanup
     document.body.removeChild(container)
@@ -66,7 +65,7 @@ describe('useMermaid', () => {
       return null
     }
 
-    const { rerender } = renderHook((props) => TestComponent(props), {
+    const { rerender } = renderHook(props => TestComponent(props), {
       initialProps: { html: '<div>initial</div>' },
     })
 

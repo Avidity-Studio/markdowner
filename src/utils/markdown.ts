@@ -108,7 +108,7 @@ export function createMarkdownRenderer() {
       try {
         const highlighted = hljs.highlight(text, { language: lang }).value
         return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`
-      } catch (e) {
+      } catch {
         // Fall through to non-highlighted rendering
       }
     }
@@ -262,7 +262,12 @@ export async function renderMarkdownToHtml(
 
   // Apply search highlighting if query is provided
   if (searchQuery) {
-    processedHtml = highlightSearchInHtml(processedHtml, searchQuery, caseSensitive, activeMatchIndex)
+    processedHtml = highlightSearchInHtml(
+      processedHtml,
+      searchQuery,
+      caseSensitive,
+      activeMatchIndex
+    )
   }
 
   const html = DOMPurify.sanitize(processedHtml, {

@@ -15,7 +15,8 @@ mermaid.initialize({
 function getCurrentMermaidTheme(): 'default' | 'dark' {
   const root = document.documentElement
   // Check if dark mode is active (either via manual toggle or system preference)
-  const isDark = root.classList.contains('dark') ||
+  const isDark =
+    root.classList.contains('dark') ||
     (!root.classList.contains('light') && window.matchMedia('(prefers-color-scheme: dark)').matches)
   return isDark ? 'dark' : 'default'
 }
@@ -25,10 +26,7 @@ function getCurrentMermaidTheme(): 'default' | 'dark' {
  * @param containerRef - Ref to the container element containing mermaid code blocks
  * @param html - The HTML content (triggers re-render when changed)
  */
-export function useMermaid(
-  containerRef: React.RefObject<HTMLElement | null>,
-  html: string
-) {
+export function useMermaid(containerRef: React.RefObject<HTMLElement | null>, html: string) {
   const processedRef = useRef<Set<string>>(new Set())
   const currentThemeRef = useRef<string>(getCurrentMermaidTheme())
 
@@ -106,7 +104,7 @@ export function useMermaid(
     mediaQuery.addEventListener('change', handleThemeChange)
 
     // Observe class changes on root element for manual theme toggle
-    const observer = new MutationObserver((mutations) => {
+    const observer = new MutationObserver(mutations => {
       for (const mutation of mutations) {
         if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
           handleThemeChange()
@@ -130,7 +128,7 @@ function hashString(str: string): string {
   let hash = 0
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
+    hash = (hash << 5) - hash + char
     hash = hash & hash // Convert to 32bit integer
   }
   return Math.abs(hash).toString(36)

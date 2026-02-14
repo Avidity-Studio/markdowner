@@ -6,18 +6,19 @@ import katex from 'katex'
  * @param containerRef - Ref to the container element containing math placeholders
  * @param html - The HTML content (triggers re-render when changed)
  */
-export function useMath(
-  containerRef: React.RefObject<HTMLElement | null>,
-  html: string
-) {
+export function useMath(containerRef: React.RefObject<HTMLElement | null>, html: string) {
   const processedRef = useRef<Set<HTMLElement>>(new Set())
 
   const renderMath = useCallback(() => {
     if (!containerRef.current) return
 
     // Find all unprocessed math placeholders
-    const mathInlineElements = containerRef.current.querySelectorAll('.math-inline:not([data-math-rendered])')
-    const mathDisplayElements = containerRef.current.querySelectorAll('.math-display:not([data-math-rendered])')
+    const mathInlineElements = containerRef.current.querySelectorAll(
+      '.math-inline:not([data-math-rendered])'
+    )
+    const mathDisplayElements = containerRef.current.querySelectorAll(
+      '.math-display:not([data-math-rendered])'
+    )
 
     // Render inline math
     for (const element of mathInlineElements) {

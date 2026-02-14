@@ -101,7 +101,7 @@ function App() {
           const maxScrollTop = preview.scrollHeight - preview.clientHeight
           preview.scrollTo({
             top: Math.max(0, Math.min(targetScrollTop, maxScrollTop)),
-            behavior: 'smooth'
+            behavior: 'smooth',
           })
         }
       }, 50)
@@ -128,7 +128,31 @@ function App() {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
-  // Search functionality
+  // Search functionality - helper to escape regex
+  const escapeRegExp = (string: string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }
+
+  // Navigate to a specific match position
+  const navigateToMatch = useCallback((start: number, end: number, focus: boolean = true) => {
+    if (!editorRef.current) return
+    const editor = editorRef.current
+    if (focus) {
+      editor.focus()
+    }
+    editor.setSelectionRange(start, end)
+    // Scroll into view
+    const text = editor.value.substring(0, start)
+    const lines = text.split('\n')
+    const lineHeight = 24 // Approximate line height
+    const scrollPosition = (lines.length - 1) * lineHeight
+    // Center the match, but clamp to valid scroll bounds to avoid white space at bottom
+    const maxScrollTop = editor.scrollHeight - editor.clientHeight
+    const targetScrollTop = scrollPosition - editor.clientHeight / 2
+    editor.scrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop))
+  }, [])
+
+  // Find all matches in the document
   const findMatches = useCallback(() => {
     if (!searchQuery || !editorRef.current) return 0
 
@@ -155,29 +179,7 @@ function App() {
     }
 
     return matches.length
-  }, [searchQuery, caseSensitive])
-
-  const escapeRegExp = (string: string) => {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  }
-
-  const navigateToMatch = useCallback((start: number, end: number, focus: boolean = true) => {
-    if (!editorRef.current) return
-    const editor = editorRef.current
-    if (focus) {
-      editor.focus()
-    }
-    editor.setSelectionRange(start, end)
-    // Scroll into view
-    const text = editor.value.substring(0, start)
-    const lines = text.split('\n')
-    const lineHeight = 24 // Approximate line height
-    const scrollPosition = (lines.length - 1) * lineHeight
-    // Center the match, but clamp to valid scroll bounds to avoid white space at bottom
-    const maxScrollTop = editor.scrollHeight - editor.clientHeight
-    const targetScrollTop = scrollPosition - editor.clientHeight / 2
-    editor.scrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop))
-  }, [])
+  }, [searchQuery, caseSensitive, navigateToMatch])
 
   const goToNextMatch = useCallback(() => {
     if (!editorRef.current || totalMatches === 0) return
@@ -490,7 +492,8 @@ function App() {
     } else {
       // Calculate scroll percentage for preview
       const previewScrollHeight = preview.scrollHeight - preview.clientHeight
-      const previewScrollPercent = previewScrollHeight > 0 ? preview.scrollTop / previewScrollHeight : 0
+      const previewScrollPercent =
+        previewScrollHeight > 0 ? preview.scrollTop / previewScrollHeight : 0
 
       // Apply to editor
       const editorScrollHeight = editor.scrollHeight - editor.clientHeight
@@ -855,11 +858,7 @@ function App() {
             >
               <ChevronDown size={18} />
             </button>
-            <button
-              className="btn-search-close"
-              onClick={closeSearch}
-              title="Close (Esc)"
-            >
+            <button className="btn-search-close" onClick={closeSearch} title="Close (Esc)">
               <X size={18} />
             </button>
           </div>
@@ -889,10 +888,7 @@ function App() {
             </div>
           )}
           <div className="search-options">
-            <button
-              className="btn-toggle-replace"
-              onClick={() => setShowReplace(!showReplace)}
-            >
+            <button className="btn-toggle-replace" onClick={() => setShowReplace(!showReplace)}>
               {showReplace ? 'Hide Replace' : 'Show Replace'}
             </button>
           </div>
