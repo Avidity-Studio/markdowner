@@ -210,10 +210,10 @@ function highlightSearchInHtml(
         node.parentNode?.replaceChild(fragment, node)
       }
     } else if (node.nodeType === Node.ELEMENT_NODE) {
-      // Skip highlighting inside certain elements
+      // Skip highlighting inside script and style elements for security
       const el = node as Element
       const tagName = el.tagName.toLowerCase()
-      if (tagName === 'code' || tagName === 'pre' || tagName === 'script' || tagName === 'style') {
+      if (tagName === 'script' || tagName === 'style') {
         return
       }
 
