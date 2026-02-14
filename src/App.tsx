@@ -16,6 +16,8 @@ import {
   CheckCircle,
   Info,
   XCircle,
+  PanelRight,
+  PanelLeft,
 } from 'lucide-react'
 import { ThemeToggle } from './components/ThemeToggle'
 import './App.css'
@@ -39,6 +41,7 @@ function App() {
   const [showRecents, setShowRecents] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [showPreviewOnly, setShowPreviewOnly] = useState(false)
   const recentsRef = useRef<HTMLDivElement>(null)
   const toastIdRef = useRef(0)
 
@@ -421,6 +424,18 @@ function App() {
           <ThemeToggle />
           <div className="toolbar-divider" />
 
+          {/* Toggle Preview Only Mode */}
+          <button
+            onClick={() => setShowPreviewOnly(!showPreviewOnly)}
+            className="btn btn-secondary"
+            title={showPreviewOnly ? 'Show Editor' : 'Preview Only'}
+          >
+            {showPreviewOnly ? <PanelLeft size={18} /> : <PanelRight size={18} />}
+            <span>{showPreviewOnly ? 'Show Editor' : 'Preview Only'}</span>
+          </button>
+
+          <div className="toolbar-divider" />
+
           {/* Recents Dropdown */}
           <div className="recents-dropdown" ref={recentsRef}>
             <button
@@ -478,18 +493,20 @@ function App() {
       </div>
 
       {/* Main Content */}
-      <div className="editor-container">
+      <div className={`editor-container ${showPreviewOnly ? 'preview-only' : ''}`}>
         {/* Editor Pane */}
-        <div className="editor-pane">
-          <div className="pane-header">Markdown</div>
-          <textarea
-            className="markdown-input"
-            value={markdown}
-            onChange={handleMarkdownChange}
-            placeholder="Type your markdown here..."
-            spellCheck={false}
-          />
-        </div>
+        {!showPreviewOnly && (
+          <div className="editor-pane">
+            <div className="pane-header">Markdown</div>
+            <textarea
+              className="markdown-input"
+              value={markdown}
+              onChange={handleMarkdownChange}
+              placeholder="Type your markdown here..."
+              spellCheck={false}
+            />
+          </div>
+        )}
 
         {/* Preview Pane */}
         <div className="preview-pane">

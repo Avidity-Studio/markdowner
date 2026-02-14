@@ -201,6 +201,16 @@ body,
   overflow: hidden;
 }
 
+/* Preview Only Mode - Editor is hidden, preview takes full width */
+.editor-container.preview-only .preview-pane {
+  flex: 1;
+  max-width: 100%;
+}
+
+.editor-container.preview-only .preview-pane .markdown-preview {
+  padding: 24px 32px;
+}
+
 /* Editor Pane */
 .editor-pane {
   flex: 1;
@@ -208,6 +218,7 @@ body,
   flex-direction: column;
   border-right: 1px solid #e0e0e0;
   background-color: #fafafa;
+  min-width: 0;
 }
 
 .pane-header {
@@ -233,6 +244,9 @@ body,
   resize: none;
   outline: none;
   color: #333;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
 }
 
 .markdown-input::placeholder {
@@ -245,6 +259,7 @@ body,
   display: flex;
   flex-direction: column;
   background-color: #ffffff;
+  min-width: 0;
 }
 
 .markdown-preview {
