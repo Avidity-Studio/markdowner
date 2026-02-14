@@ -131,11 +131,111 @@ function escapeHtml(text: string): string {
 }
 
 /**
+ * Escape special regex characters in a string
+ */
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Highlight search matches in HTML text
+ * Wraps matching text in <mark> elements with search-highlight class
+ * The active match (at activeMatchIndex) gets the search-highlight-active class
+ */
+function highlightSearchInHtml(
+  html: string,
+  searchQuery: string,
+  caseSensitive: boolean,
+  activeMatchIndex: number = 0
+): string {
+  if (!searchQuery) return html
+
+  const flags = caseSensitive ? 'g' : 'gi'
+  const escapedQuery = escapeRegExp(searchQuery)
+  const regex = new RegExp(`(${escapedQuery})`, flags)
+
+  // Create a temporary div to parse the HTML
+  const div = document.createElement('div')
+  div.innerHTML = html
+
+  // Track match index across all text nodes
+  let matchCounter = 0
+
+  // Recursively process text nodes to add highlighting
+  const highlightTextNodes = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || ''
+      const matches: Array<{ start: number; end: number }> = []
+      let match
+
+      // Find all matches in this text node
+      while ((match = regex.exec(text)) !== null) {
+        matches.push({ start: match.index, end: match.index + match[0].length })
+        if (match[0].length === 0) regex.lastIndex++
+      }
+
+      if (matches.length > 0) {
+        // Reset regex for next node
+        regex.lastIndex = 0
+
+        // Build fragment with highlighted matches
+        const fragment = document.createDocumentFragment()
+        let lastEnd = 0
+
+        matches.forEach(({ start, end }) => {
+          // Add text before match
+          if (start > lastEnd) {
+            fragment.appendChild(document.createTextNode(text.substring(lastEnd, start)))
+          }
+
+          // Add highlighted match
+          matchCounter++
+          const mark = document.createElement('mark')
+          mark.className = 'search-highlight'
+          if (matchCounter === activeMatchIndex) {
+            mark.classList.add('search-highlight-active')
+            mark.id = 'search-highlight-active'
+          }
+          mark.textContent = text.substring(start, end)
+          fragment.appendChild(mark)
+
+          lastEnd = end
+        })
+
+        // Add remaining text after last match
+        if (lastEnd < text.length) {
+          fragment.appendChild(document.createTextNode(text.substring(lastEnd)))
+        }
+
+        node.parentNode?.replaceChild(fragment, node)
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      // Skip highlighting inside certain elements
+      const el = node as Element
+      const tagName = el.tagName.toLowerCase()
+      if (tagName === 'code' || tagName === 'pre' || tagName === 'script' || tagName === 'style') {
+        return
+      }
+
+      // Process child nodes (create a copy to avoid mutation issues)
+      Array.from(node.childNodes).forEach(highlightTextNodes)
+    }
+  }
+
+  Array.from(div.childNodes).forEach(highlightTextNodes)
+
+  return div.innerHTML
+}
+
+/**
  * Render markdown to sanitized HTML with mermaid support and syntax highlighting
  * Also returns extracted math expressions for separate rendering
  */
 export async function renderMarkdownToHtml(
-  markdown: string
+  markdown: string,
+  searchQuery?: string,
+  caseSensitive: boolean = false,
+  activeMatchIndex: number = 0
 ): Promise<{
   html: string
   mathExpressions: Map<string, { type: 'inline' | 'display'; content: string }>
@@ -160,9 +260,14 @@ export async function renderMarkdownToHtml(
     processedHtml = processedHtml.replace(new RegExp(placeholder, 'g'), spanElement)
   })
 
+  // Apply search highlighting if query is provided
+  if (searchQuery) {
+    processedHtml = highlightSearchInHtml(processedHtml, searchQuery, caseSensitive, activeMatchIndex)
+  }
+
   const html = DOMPurify.sanitize(processedHtml, {
-    ADD_TAGS: ['span'],
-    ADD_ATTR: ['class', 'data-math'],
+    ADD_TAGS: ['span', 'mark'],
+    ADD_ATTR: ['class', 'data-math', 'id'],
   })
 
   return { html, mathExpressions }

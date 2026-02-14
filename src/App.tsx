@@ -18,6 +18,10 @@ import {
   XCircle,
   PanelRight,
   PanelLeft,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  CaseSensitive,
 } from 'lucide-react'
 import { ThemeToggle } from './components/ThemeToggle'
 import './App.css'
@@ -45,6 +49,16 @@ function App() {
   const recentsRef = useRef<HTMLDivElement>(null)
   const toastIdRef = useRef(0)
 
+  // Search state
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [replaceQuery, setReplaceQuery] = useState('')
+  const [caseSensitive, setCaseSensitive] = useState(false)
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
+  const [totalMatches, setTotalMatches] = useState(0)
+  const [showReplace, setShowReplace] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
   // Debounced markdown rendering with sanitization
   const [html, setHtml] = useState<string>('')
   const previewRef = useRef<HTMLDivElement>(null)
@@ -57,11 +71,40 @@ function App() {
   useEffect(() => {
     const renderMarkdown = async () => {
       // Use our custom renderer with mermaid and math support
-      const { html: sanitizedHtml } = await renderMarkdownToHtml(markdown)
+      // Pass search query and active match index to highlight matches in preview
+      const { html: sanitizedHtml } = await renderMarkdownToHtml(
+        markdown,
+        showSearch ? searchQuery : '',
+        caseSensitive,
+        currentMatchIndex
+      )
       setHtml(sanitizedHtml)
     }
     renderMarkdown()
-  }, [markdown])
+  }, [markdown, showSearch, searchQuery, caseSensitive, currentMatchIndex])
+
+  // Scroll active search highlight into view in preview
+  useEffect(() => {
+    if (showSearch && searchQuery && currentMatchIndex > 0) {
+      // Use setTimeout to wait for the DOM to update after html changes
+      setTimeout(() => {
+        const preview = previewRef.current
+        const activeHighlight = preview?.querySelector('#search-highlight-active')
+        if (preview && activeHighlight) {
+          // Calculate scroll position to center the highlight but stay within bounds
+          const previewRect = preview.getBoundingClientRect()
+          const highlightRect = activeHighlight.getBoundingClientRect()
+          const relativeTop = highlightRect.top - previewRect.top + preview.scrollTop
+          const targetScrollTop = relativeTop - preview.clientHeight / 2 + highlightRect.height / 2
+          const maxScrollTop = preview.scrollHeight - preview.clientHeight
+          preview.scrollTo({
+            top: Math.max(0, Math.min(targetScrollTop, maxScrollTop)),
+            behavior: 'smooth'
+          })
+        }
+      }, 50)
+    }
+  }, [html, showSearch, searchQuery, currentMatchIndex])
 
   // Render mermaid diagrams after HTML is set
   useMermaid(previewRef, html)
@@ -82,6 +125,185 @@ function App() {
   const removeToast = useCallback((id: number) => {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
+
+  // Search functionality
+  const findMatches = useCallback(() => {
+    if (!searchQuery || !editorRef.current) return 0
+
+    const editor = editorRef.current
+    const text = editor.value
+    const flags = caseSensitive ? 'g' : 'gi'
+    const regex = new RegExp(escapeRegExp(searchQuery), flags)
+
+    const matches: { start: number; end: number }[] = []
+    let match
+    while ((match = regex.exec(text)) !== null) {
+      matches.push({ start: match.index, end: match.index + match[0].length })
+      // Prevent infinite loop on zero-width matches
+      if (match[0].length === 0) regex.lastIndex++
+    }
+
+    setTotalMatches(matches.length)
+    if (matches.length > 0) {
+      setCurrentMatchIndex(1)
+      // Scroll to first match (don't focus editor while typing in search box)
+      navigateToMatch(matches[0].start, matches[0].end, false)
+    } else {
+      setCurrentMatchIndex(0)
+    }
+
+    return matches.length
+  }, [searchQuery, caseSensitive])
+
+  const escapeRegExp = (string: string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }
+
+  const navigateToMatch = useCallback((start: number, end: number, focus: boolean = true) => {
+    if (!editorRef.current) return
+    const editor = editorRef.current
+    if (focus) {
+      editor.focus()
+    }
+    editor.setSelectionRange(start, end)
+    // Scroll into view
+    const text = editor.value.substring(0, start)
+    const lines = text.split('\n')
+    const lineHeight = 24 // Approximate line height
+    const scrollPosition = (lines.length - 1) * lineHeight
+    // Center the match, but clamp to valid scroll bounds to avoid white space at bottom
+    const maxScrollTop = editor.scrollHeight - editor.clientHeight
+    const targetScrollTop = scrollPosition - editor.clientHeight / 2
+    editor.scrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop))
+  }, [])
+
+  const goToNextMatch = useCallback(() => {
+    if (!editorRef.current || totalMatches === 0) return
+    const editor = editorRef.current
+    const text = editor.value
+    const flags = caseSensitive ? 'g' : 'gi'
+    const regex = new RegExp(escapeRegExp(searchQuery), flags)
+
+    const matches: { start: number; end: number }[] = []
+    let match
+    while ((match = regex.exec(text)) !== null) {
+      matches.push({ start: match.index, end: match.index + match[0].length })
+      if (match[0].length === 0) regex.lastIndex++
+    }
+
+    const nextIndex = currentMatchIndex >= matches.length ? 1 : currentMatchIndex + 1
+    setCurrentMatchIndex(nextIndex)
+    if (matches[nextIndex - 1]) {
+      navigateToMatch(matches[nextIndex - 1].start, matches[nextIndex - 1].end, true)
+    }
+  }, [searchQuery, caseSensitive, totalMatches, currentMatchIndex, navigateToMatch])
+
+  const goToPreviousMatch = useCallback(() => {
+    if (!editorRef.current || totalMatches === 0) return
+    const editor = editorRef.current
+    const text = editor.value
+    const flags = caseSensitive ? 'g' : 'gi'
+    const regex = new RegExp(escapeRegExp(searchQuery), flags)
+
+    const matches: { start: number; end: number }[] = []
+    let match
+    while ((match = regex.exec(text)) !== null) {
+      matches.push({ start: match.index, end: match.index + match[0].length })
+      if (match[0].length === 0) regex.lastIndex++
+    }
+
+    const prevIndex = currentMatchIndex <= 1 ? matches.length : currentMatchIndex - 1
+    setCurrentMatchIndex(prevIndex)
+    if (matches[prevIndex - 1]) {
+      navigateToMatch(matches[prevIndex - 1].start, matches[prevIndex - 1].end, true)
+    }
+  }, [searchQuery, caseSensitive, totalMatches, currentMatchIndex, navigateToMatch])
+
+  const replaceCurrent = useCallback(() => {
+    if (!editorRef.current || totalMatches === 0) return
+    const editor = editorRef.current
+    const start = editor.selectionStart
+    const end = editor.selectionEnd
+    const selectedText = editor.value.substring(start, end)
+
+    const flags = caseSensitive ? 'g' : 'gi'
+    const regex = new RegExp(`^${escapeRegExp(searchQuery)}$`, flags)
+
+    if (regex.test(selectedText)) {
+      const newValue = editor.value.substring(0, start) + replaceQuery + editor.value.substring(end)
+      setMarkdown(newValue)
+      setIsDirty(true)
+      // After replacement, find next match
+      setTimeout(() => {
+        findMatches()
+      }, 0)
+    }
+  }, [searchQuery, replaceQuery, caseSensitive, totalMatches, findMatches])
+
+  const replaceAll = useCallback(() => {
+    if (!editorRef.current || !searchQuery) return
+    const editor = editorRef.current
+    const flags = caseSensitive ? 'g' : 'gi'
+    const regex = new RegExp(escapeRegExp(searchQuery), flags)
+    const newValue = editor.value.replace(regex, replaceQuery)
+    setMarkdown(newValue)
+    setIsDirty(true)
+    setTotalMatches(0)
+    setCurrentMatchIndex(0)
+  }, [searchQuery, replaceQuery, caseSensitive])
+
+  const closeSearch = useCallback(() => {
+    setShowSearch(false)
+    setShowReplace(false)
+    setSearchQuery('')
+    setReplaceQuery('')
+    setTotalMatches(0)
+    setCurrentMatchIndex(0)
+    // Only focus editor if not in preview-only mode
+    if (!showPreviewOnly) {
+      editorRef.current?.focus()
+    }
+  }, [showPreviewOnly])
+
+  // Effect to find matches when search query or case sensitivity changes
+  useEffect(() => {
+    if (showSearch && searchQuery) {
+      findMatches()
+    }
+  }, [showSearch, searchQuery, caseSensitive, findMatches])
+
+  // Keyboard shortcut for search (Ctrl/Cmd + F)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + F to open search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        setShowSearch(true)
+        setTimeout(() => searchInputRef.current?.focus(), 0)
+      }
+      // Escape to close search
+      if (e.key === 'Escape' && showSearch) {
+        closeSearch()
+      }
+      // Enter to go to next match
+      if (e.key === 'Enter' && showSearch && !e.shiftKey) {
+        e.preventDefault()
+        if (showReplace && document.activeElement === searchInputRef.current) {
+          goToNextMatch()
+        } else if (!showReplace) {
+          goToNextMatch()
+        }
+      }
+      // Shift + Enter to go to previous match
+      if (e.key === 'Enter' && showSearch && e.shiftKey) {
+        e.preventDefault()
+        goToPreviousMatch()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [showSearch, showReplace, goToNextMatch, goToPreviousMatch, closeSearch])
 
   // Load recent files on mount and check for pending file (opened via file association)
   useEffect(() => {
@@ -487,6 +709,21 @@ function App() {
           <ThemeToggle />
           <div className="toolbar-divider" />
 
+          {/* Search Button */}
+          <button
+            onClick={() => {
+              setShowSearch(true)
+              setTimeout(() => searchInputRef.current?.focus(), 0)
+            }}
+            className="btn btn-secondary"
+            title="Find (Ctrl/Cmd + F)"
+          >
+            <Search size={18} />
+            <span>Find</span>
+          </button>
+
+          <div className="toolbar-divider" />
+
           {/* Toggle Preview Only Mode */}
           <button
             onClick={() => setShowPreviewOnly(!showPreviewOnly)}
@@ -555,23 +792,108 @@ function App() {
         </div>
       </div>
 
+      {/* Search Panel */}
+      {showSearch && (
+        <div className="search-panel">
+          <div className="search-row">
+            <div className="search-input-wrapper">
+              <Search size={16} className="search-icon" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="search-input"
+                placeholder="Find..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              {totalMatches > 0 && (
+                <span className="match-counter">
+                  {currentMatchIndex} / {totalMatches}
+                </span>
+              )}
+            </div>
+            <button
+              className={`btn-search-option ${caseSensitive ? 'active' : ''}`}
+              onClick={() => setCaseSensitive(!caseSensitive)}
+              title="Case Sensitive"
+            >
+              <CaseSensitive size={16} />
+            </button>
+            <button
+              className="btn-search-nav"
+              onClick={goToPreviousMatch}
+              disabled={totalMatches === 0}
+              title="Previous Match (Shift+Enter)"
+            >
+              <ChevronUp size={18} />
+            </button>
+            <button
+              className="btn-search-nav"
+              onClick={goToNextMatch}
+              disabled={totalMatches === 0}
+              title="Next Match (Enter)"
+            >
+              <ChevronDown size={18} />
+            </button>
+            <button
+              className="btn-search-close"
+              onClick={closeSearch}
+              title="Close (Esc)"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          {showReplace && (
+            <div className="replace-row">
+              <input
+                type="text"
+                className="replace-input"
+                placeholder="Replace with..."
+                value={replaceQuery}
+                onChange={e => setReplaceQuery(e.target.value)}
+              />
+              <button
+                className="btn-replace"
+                onClick={replaceCurrent}
+                disabled={totalMatches === 0}
+              >
+                Replace
+              </button>
+              <button
+                className="btn-replace-all"
+                onClick={replaceAll}
+                disabled={totalMatches === 0 || !searchQuery}
+              >
+                Replace All
+              </button>
+            </div>
+          )}
+          <div className="search-options">
+            <button
+              className="btn-toggle-replace"
+              onClick={() => setShowReplace(!showReplace)}
+            >
+              {showReplace ? 'Hide Replace' : 'Show Replace'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className={`editor-container ${showPreviewOnly ? 'preview-only' : ''}`}>
-        {/* Editor Pane */}
-        {!showPreviewOnly && (
-          <div className="editor-pane">
-            <div className="pane-header">Markdown</div>
-            <textarea
-              ref={editorRef}
-              className="markdown-input"
-              value={markdown}
-              onChange={handleMarkdownChange}
-              onScroll={handleEditorScroll}
-              placeholder="Type your markdown here..."
-              spellCheck={false}
-            />
-          </div>
-        )}
+        {/* Editor Pane - always rendered but hidden in preview-only mode for search to work */}
+        <div className="editor-pane">
+          <div className="pane-header">Markdown</div>
+          <textarea
+            ref={editorRef}
+            className="markdown-input"
+            value={markdown}
+            onChange={handleMarkdownChange}
+            onScroll={handleEditorScroll}
+            placeholder="Type your markdown here..."
+            spellCheck={false}
+          />
+        </div>
 
         {/* Preview Pane */}
         <div className="preview-pane">
