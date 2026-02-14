@@ -1151,3 +1151,106 @@ body,
   border-left-color: #30363d;
   border-bottom-color: #30363d;
 }
+
+/* ================================
+   MATH EXPRESSIONS (KaTeX)
+   ================================ */
+
+/* Inline math */
+.math-inline {
+  display: inline;
+}
+
+.math-inline .katex {
+  font-size: 1em;
+}
+
+/* Display math */
+.math-display {
+  display: block;
+  margin: 16px 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.math-display .katex {
+  font-size: 1.21em;
+}
+
+.math-display .katex-display {
+  margin: 0;
+}
+
+/* Math error state */
+.math-error {
+  color: #dc2626;
+  font-family: 'SF Mono', Monaco, Inconsolata, monospace;
+}
+
+/* Dark mode - Math expressions */
+.dark .math-inline .katex,
+.dark .math-display .katex {
+  color: #e5e7eb;
+}
+
+.dark .math-error {
+  color: #fca5a5;
+}
+
+/* KaTeX specific dark mode fixes */
+.dark .katex .mord,
+.dark .katex .mbin,
+.dark .katex .mrel,
+.dark .katex .mopen,
+.dark .katex .mclose,
+.dark .katex .mpunct,
+.dark .katex .minner {
+  color: #e5e7eb;
+}
+
+.dark .katex .msupsub {
+  color: #e5e7eb;
+}
+
+.dark .katex .text {
+  color: #e5e7eb;
+}
+
+.dark .katex .mathit {
+  color: #e5e7eb;
+}
+
+.dark .katex .mathbf {
+  color: #f3f4f6;
+}
+
+.dark .katex .sizing,
+.dark .katex .fontsize-ensurer {
+  color: #e5e7eb;
+}
+
+/* Math scrollbars for overflow */
+.math-display::-webkit-scrollbar {
+  height: 4px;
+}
+
+.math-display::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.math-display::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.dark .math-display::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+.math-display::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+.dark .math-display::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}

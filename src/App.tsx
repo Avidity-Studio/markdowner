@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { listen } from '@tauri-apps/api/event'
 import { useMermaid } from './hooks/useMermaid'
+import { useMath } from './hooks/useMath'
 import { renderMarkdownToHtml } from './utils/markdown'
 import {
   FolderOpen,
@@ -30,7 +31,7 @@ interface Toast {
 
 function App() {
   const [markdown, setMarkdown] = useState<string>(
-    '# Welcome to Markdown Editor\n\nStart typing your markdown here...\n\n## Features\n\n- **Live preview** - See your changes in real-time\n- **File operations** - Open and save markdown files\n- **Drag & drop** - Drop markdown files to open them\n- **Mermaid diagrams** - Render flowcharts and diagrams\n- **Syntax highlighting** - Code blocks with GitHub-style highlighting\n- **Clean interface** - Focus on your writing\n\n## Code Example\n\n```typescript\n// Example TypeScript code with syntax highlighting\ninterface User {\n  id: number;\n  name: string;\n  email: string;\n}\n\nfunction greetUser(user: User): string {\n  return `Hello, ${user.name}!`;\n}\n\nconst user: User = {\n  id: 1,\n  name: "Alice",\n  email: "alice@example.com"\n};\n\nconsole.log(greetUser(user));\n```\n\n## Mermaid Diagram Example\n\n```mermaid\nflowchart TD\n    A[Start] --> B{Is it working?}\n    B -->|Yes| C[Great!]\n    B -->|No| D[Debug]\n    D --> B\n    C --> E[Deploy]\n```\n\n> Tip: Use the toolbar buttons to open or save files, or drag and drop a markdown file onto the window!'
+    '# Welcome to Markdown Editor\n\nStart typing your markdown here...\n\n## Features\n\n- **Live preview** - See your changes in real-time\n- **File operations** - Open and save markdown files\n- **Drag & drop** - Drop markdown files to open them\n- **Mermaid diagrams** - Render flowcharts and diagrams\n- **Math support** - LaTeX-style math expressions\n- **Syntax highlighting** - Code blocks with GitHub-style highlighting\n- **Clean interface** - Focus on your writing\n\n## Code Example\n\n```typescript\n// Example TypeScript code with syntax highlighting\ninterface User {\n  id: number;\n  name: string;\n  email: string;\n}\n\nfunction greetUser(user: User): string {\n  return `Hello, ${user.name}!`;\n}\n\nconst user: User = {\n  id: 1,\n  name: "Alice",\n  email: "alice@example.com"\n};\n\nconsole.log(greetUser(user));\n```\n\n## Math Expressions\n\nThis editor supports LaTeX-style math expressions using KaTeX.\n\n### Inline Math\nYou can write inline math like $E = mc^2$ or $\\frac{d}{dx}(x^2) = 2x$ right in your sentences.\n\n### Display Math\nFor more complex equations, use display math:\n\n$$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$\n\n$$\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$$\n\n$$\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}$$\n\n## Mermaid Diagram Example\n\n```mermaid\nflowchart TD\n    A[Start] --> B{Is it working?}\n    B -->|Yes| C[Great!]\n    B -->|No| D[Debug]\n    D --> B\n    C --> E[Deploy]\n```\n\n> Tip: Use the toolbar buttons to open or save files, or drag and drop a markdown file onto the window!'
   )
   const [currentFile, setCurrentFile] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
@@ -47,8 +48,8 @@ function App() {
 
   useEffect(() => {
     const renderMarkdown = async () => {
-      // Use our custom renderer with mermaid support
-      const sanitizedHtml = await renderMarkdownToHtml(markdown)
+      // Use our custom renderer with mermaid and math support
+      const { html: sanitizedHtml } = await renderMarkdownToHtml(markdown)
       setHtml(sanitizedHtml)
     }
     renderMarkdown()
@@ -56,6 +57,9 @@ function App() {
 
   // Render mermaid diagrams after HTML is set
   useMermaid(previewRef, html)
+
+  // Render math expressions after HTML is set
+  useMath(previewRef, html)
 
   // Toast notification helper
   const showToast = useCallback((message: string, type: ToastType = 'info') => {

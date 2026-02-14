@@ -54,6 +54,43 @@ hljs.registerLanguage('dockerfile', dockerfile)
 hljs.registerLanguage('graphql', graphql)
 hljs.registerLanguage('gql', graphql)
 
+// Math placeholder prefix for escaping math during markdown parsing
+const MATH_INLINE_PREFIX = 'MATH_INLINE_PLACEHOLDER_'
+const MATH_DISPLAY_PREFIX = 'MATH_DISPLAY_PLACEHOLDER_'
+
+/**
+ * Extract and replace math expressions with placeholders
+ * Returns the processed text and the extracted math expressions
+ */
+function extractMathExpressions(text: string): {
+  text: string
+  mathExpressions: Map<string, { type: 'inline' | 'display'; content: string }>
+} {
+  const mathExpressions = new Map<string, { type: 'inline' | 'display'; content: string }>()
+  let counter = 0
+  let processedText = text
+
+  // First, extract display math ($$...$$) - must be done before inline
+  // Display math can span multiple lines, so use [\s\S]
+  processedText = processedText.replace(/\$\$([\s\S]*?)\$\$/g, (_, content) => {
+    const placeholder = `${MATH_DISPLAY_PREFIX}${counter++}`
+    mathExpressions.set(placeholder, { type: 'display', content: content.trim() })
+    return placeholder
+  })
+
+  // Then, extract inline math ($...$)
+  // Inline math should NOT span multiple lines - use [^\n] instead of [\s\S]
+  // This prevents matching math expressions that cross code block boundaries
+  // Negative lookbehind to avoid matching escaped dollars
+  processedText = processedText.replace(/(?<!\\)\$([^\s$][^$\n]*?)\$/g, (_, content) => {
+    const placeholder = `${MATH_INLINE_PREFIX}${counter++}`
+    mathExpressions.set(placeholder, { type: 'inline', content: content.trim() })
+    return placeholder
+  })
+
+  return { text: processedText, mathExpressions }
+}
+
 // Extend marked renderer to handle mermaid code blocks specially
 export function createMarkdownRenderer() {
   const renderer = new marked.Renderer()
@@ -95,17 +132,40 @@ function escapeHtml(text: string): string {
 
 /**
  * Render markdown to sanitized HTML with mermaid support and syntax highlighting
+ * Also returns extracted math expressions for separate rendering
  */
-export async function renderMarkdownToHtml(markdown: string): Promise<string> {
+export async function renderMarkdownToHtml(
+  markdown: string
+): Promise<{
+  html: string
+  mathExpressions: Map<string, { type: 'inline' | 'display'; content: string }>
+}> {
+  // Extract math expressions before parsing markdown
+  const { text: textWithoutMath, mathExpressions } = extractMathExpressions(markdown)
+
   const renderer = createMarkdownRenderer()
 
   marked.use({ renderer })
 
-  const rawHtml = await marked.parse(markdown, {
+  const rawHtml = await marked.parse(textWithoutMath, {
     gfm: true,
     breaks: true,
   })
-  return DOMPurify.sanitize(rawHtml)
+
+  // Replace math placeholders with span elements that can be targeted
+  let processedHtml = rawHtml
+  mathExpressions.forEach((data, placeholder) => {
+    const className = data.type === 'display' ? 'math-display' : 'math-inline'
+    const spanElement = `<span class="${className}" data-math="${encodeURIComponent(data.content)}"></span>`
+    processedHtml = processedHtml.replace(new RegExp(placeholder, 'g'), spanElement)
+  })
+
+  const html = DOMPurify.sanitize(processedHtml, {
+    ADD_TAGS: ['span'],
+    ADD_ATTR: ['class', 'data-math'],
+  })
+
+  return { html, mathExpressions }
 }
 
 /**
