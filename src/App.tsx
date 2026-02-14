@@ -48,6 +48,11 @@ function App() {
   // Debounced markdown rendering with sanitization
   const [html, setHtml] = useState<string>('')
   const previewRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<HTMLTextAreaElement>(null)
+
+  // Synchronized scrolling state
+  const isScrolling = useRef(false)
+  const scrollTimeout = useRef<number | null>(null)
 
   useEffect(() => {
     const renderMarkdown = async () => {
@@ -236,6 +241,64 @@ function App() {
   const handleMarkdownChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMarkdown(e.target.value)
     setIsDirty(true)
+  }, [])
+
+  // Synchronized scroll handler
+  const syncScroll = useCallback((source: 'editor' | 'preview') => {
+    if (isScrolling.current) return
+    isScrolling.current = true
+
+    const editor = editorRef.current
+    const preview = previewRef.current
+    if (!editor || !preview) {
+      isScrolling.current = false
+      return
+    }
+
+    if (source === 'editor') {
+      // Calculate scroll percentage for editor
+      const editorScrollHeight = editor.scrollHeight - editor.clientHeight
+      const editorScrollPercent = editorScrollHeight > 0 ? editor.scrollTop / editorScrollHeight : 0
+
+      // Apply to preview
+      const previewScrollHeight = preview.scrollHeight - preview.clientHeight
+      preview.scrollTop = editorScrollPercent * previewScrollHeight
+    } else {
+      // Calculate scroll percentage for preview
+      const previewScrollHeight = preview.scrollHeight - preview.clientHeight
+      const previewScrollPercent = previewScrollHeight > 0 ? preview.scrollTop / previewScrollHeight : 0
+
+      // Apply to editor
+      const editorScrollHeight = editor.scrollHeight - editor.clientHeight
+      editor.scrollTop = previewScrollPercent * editorScrollHeight
+    }
+
+    // Clear scrolling flag after a short delay
+    if (scrollTimeout.current) {
+      window.clearTimeout(scrollTimeout.current)
+    }
+    scrollTimeout.current = window.setTimeout(() => {
+      isScrolling.current = false
+    }, 50)
+  }, [])
+
+  // Handle editor scroll
+  const handleEditorScroll = useCallback(() => {
+    syncScroll('editor')
+  }, [syncScroll])
+
+  // Handle preview scroll
+  const handlePreviewScroll = useCallback(() => {
+    syncScroll('preview')
+  }, [syncScroll])
+
+  // Cleanup scroll timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeout.current) {
+        window.clearTimeout(scrollTimeout.current)
+      }
+    }
   }, [])
 
   const getFileName = (path: string) => {
@@ -499,9 +562,11 @@ function App() {
           <div className="editor-pane">
             <div className="pane-header">Markdown</div>
             <textarea
+              ref={editorRef}
               className="markdown-input"
               value={markdown}
               onChange={handleMarkdownChange}
+              onScroll={handleEditorScroll}
               placeholder="Type your markdown here..."
               spellCheck={false}
             />
@@ -514,6 +579,7 @@ function App() {
           <div
             ref={previewRef}
             className="markdown-preview"
+            onScroll={handlePreviewScroll}
             dangerouslySetInnerHTML={{ __html: html }}
           />
         </div>
