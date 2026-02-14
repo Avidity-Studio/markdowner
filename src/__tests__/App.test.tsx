@@ -34,8 +34,11 @@ describe('App', () => {
     render(<App />)
 
     await waitForRTL(() => {
-      expect(screen.getByText('Markdown')).toBeInTheDocument()
-      expect(screen.getByText('Preview')).toBeInTheDocument()
+      // Check for pane headers using class name to distinguish from toggle buttons
+      const markdownHeader = screen.getByText('Markdown', { selector: '.pane-header' })
+      const previewHeader = screen.getByText('Preview', { selector: '.pane-header' })
+      expect(markdownHeader).toBeInTheDocument()
+      expect(previewHeader).toBeInTheDocument()
     })
   })
 

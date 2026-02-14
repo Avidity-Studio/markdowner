@@ -80,6 +80,61 @@ body,
   transition: all 0.2s ease;
 }
 
+/* View Mode Toggle Group - Icon-only, styled like ThemeToggle */
+.view-mode-toggle {
+  display: flex;
+  align-items: center;
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 2px;
+}
+
+.view-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-mode-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #374151;
+}
+
+.view-mode-btn.active {
+  background-color: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode - View Mode Toggle */
+.dark .view-mode-toggle {
+  background-color: #374151;
+}
+
+.dark .view-mode-btn {
+  color: #9ca3af;
+}
+
+.dark .view-mode-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+}
+
+.dark .view-mode-btn.active {
+  background-color: #4b5563;
+  color: #60a5fa;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
 .btn-primary {
   background-color: #2563eb;
   color: white;
@@ -201,6 +256,31 @@ body,
   overflow: hidden;
 }
 
+/* Split Mode (default) - Both panes visible */
+.editor-container.split .editor-pane {
+  flex: 1;
+  display: flex;
+}
+
+.editor-container.split .preview-pane {
+  flex: 1;
+  display: flex;
+}
+
+/* Markdown Only Mode - Preview is hidden, editor takes full width */
+.editor-container.markdown-only .preview-pane {
+  display: none;
+}
+
+.editor-container.markdown-only .editor-pane {
+  flex: 1;
+  max-width: 100%;
+}
+
+.editor-container.markdown-only .markdown-input {
+  padding: 24px 32px;
+}
+
 /* Preview Only Mode - Editor is hidden, preview takes full width */
 .editor-container.preview-only .editor-pane {
   display: none;
@@ -211,7 +291,7 @@ body,
   max-width: 100%;
 }
 
-.editor-container.preview-only .preview-pane .markdown-preview {
+.editor-container.preview-only .markdown-preview {
   padding: 24px 32px;
 }
 

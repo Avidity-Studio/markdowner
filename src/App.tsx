@@ -18,6 +18,7 @@ import {
   XCircle,
   PanelRight,
   PanelLeft,
+  PanelTop,
   Search,
   ChevronDown,
   ChevronUp,
@@ -45,7 +46,8 @@ function App() {
   const [showRecents, setShowRecents] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
-  const [showPreviewOnly, setShowPreviewOnly] = useState(false)
+  type ViewMode = 'markdown-only' | 'split' | 'preview-only'
+  const [viewMode, setViewMode] = useState<ViewMode>('split')
   const recentsRef = useRef<HTMLDivElement>(null)
   const toastIdRef = useRef(0)
 
@@ -260,10 +262,10 @@ function App() {
     setTotalMatches(0)
     setCurrentMatchIndex(0)
     // Only focus editor if not in preview-only mode
-    if (!showPreviewOnly) {
+    if (viewMode !== 'preview-only') {
       editorRef.current?.focus()
     }
-  }, [showPreviewOnly])
+  }, [viewMode])
 
   // Effect to find matches when search query or case sensitivity changes
   useEffect(() => {
@@ -724,15 +726,33 @@ function App() {
 
           <div className="toolbar-divider" />
 
-          {/* Toggle Preview Only Mode */}
-          <button
-            onClick={() => setShowPreviewOnly(!showPreviewOnly)}
-            className="btn btn-secondary"
-            title={showPreviewOnly ? 'Show Editor' : 'Preview Only'}
-          >
-            {showPreviewOnly ? <PanelLeft size={18} /> : <PanelRight size={18} />}
-            <span>{showPreviewOnly ? 'Show Editor' : 'Preview Only'}</span>
-          </button>
+          {/* View Mode Toggle Group */}
+          <div className="view-mode-toggle">
+            <button
+              onClick={() => setViewMode('markdown-only')}
+              className={`view-mode-btn ${viewMode === 'markdown-only' ? 'active' : ''}`}
+              title="Markdown Only"
+              aria-label="Switch to Markdown Only view"
+            >
+              <PanelLeft size={16} />
+            </button>
+            <button
+              onClick={() => setViewMode('split')}
+              className={`view-mode-btn ${viewMode === 'split' ? 'active' : ''}`}
+              title="Split View"
+              aria-label="Switch to Split view"
+            >
+              <PanelTop size={16} />
+            </button>
+            <button
+              onClick={() => setViewMode('preview-only')}
+              className={`view-mode-btn ${viewMode === 'preview-only' ? 'active' : ''}`}
+              title="Preview Only"
+              aria-label="Switch to Preview Only view"
+            >
+              <PanelRight size={16} />
+            </button>
+          </div>
 
           <div className="toolbar-divider" />
 
@@ -880,7 +900,7 @@ function App() {
       )}
 
       {/* Main Content */}
-      <div className={`editor-container ${showPreviewOnly ? 'preview-only' : ''}`}>
+      <div className={`editor-container ${viewMode}`}>
         {/* Editor Pane - always rendered but hidden in preview-only mode for search to work */}
         <div className="editor-pane">
           <div className="pane-header">Markdown</div>
