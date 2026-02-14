@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release-macos:
+    name: Build and Release macOS DMG
+    runs-on: macos-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-
+
+      - name: Cache Cargo build
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-target-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri app (Apple Silicon)
+        run: npm run tauri build -- --target aarch64-apple-darwin
+
+      - name: Build Tauri app (Intel)
+        run: npm run tauri build -- --target x86_64-apple-darwin
+
+      - name: Create Universal DMG
+        run: |
+          mkdir -p src-tauri/target/universal-apple-darwin/release/bundle/dmg
+          APP_ARM=$(ls src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg 2>/dev/null | head -1)
+          APP_X64=$(ls src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg 2>/dev/null | head -1)
+          if [ -n "$APP_ARM" ] && [ -n "$APP_X64" ]; then
+            hdiutil attach "$APP_ARM" -mountpoint /tmp/arm_mount
+            hdiutil attach "$APP_X64" -mountpoint /tmp/x64_mount
+            APP_NAME_ARM=$(ls /tmp/arm_mount/*.app | head -1 | xargs basename)
+            APP_NAME_X64=$(ls /tmp/x64_mount/*.app | head -1 | xargs basename)
+            cp -R "/tmp/arm_mount/$APP_NAME_ARM" "/tmp/$APP_NAME_ARM"
+            lipo -create "/tmp/arm_mount/$APP_NAME_ARM/Contents/MacOS/$(basename "$APP_NAME_ARM" .app)" "/tmp/x64_mount/$APP_NAME_X64/Contents/MacOS/$(basename "$APP_NAME_X64" .app)" -output "/tmp/$APP_NAME_ARM/Contents/MacOS/$(basename "$APP_NAME_ARM" .app)"
+            hdiutil detach /tmp/arm_mount
+            hdiutil detach /tmp/x64_mount
+            VERSION=${GITHUB_REF#refs/tags/}
+            if [ "$VERSION" = "$GITHUB_REF" ]; then
+              VERSION="${{ github.event.inputs.tag }}"
+            fi
+            DMG_NAME="markdowner-${VERSION}-universal.dmg"
+            hdiutil create -volname "Markdowner" -srcfolder "/tmp/$APP_NAME_ARM" -ov -format UDZO "src-tauri/target/universal-apple-darwin/release/bundle/dmg/$DMG_NAME"
+          else
+            cp src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg src-tauri/target/universal-apple-darwin/release/bundle/dmg/
+          fi
+
+      - name: Upload DMG artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
