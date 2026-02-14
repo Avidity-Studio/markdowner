@@ -59,23 +59,23 @@ export function useMermaid(
       if (!pre) continue
 
       try {
-        // Create a container for the diagram
+        // Render the mermaid diagram first (before modifying DOM)
+        const { svg } = await mermaid.render(`${id}-svg`, code)
+
+        // Only replace the pre element if rendering succeeded
         const container = document.createElement('div')
         container.id = id
         container.className = 'mermaid-container'
+        container.innerHTML = svg
 
         // Replace the pre element with the container
         pre.parentElement?.replaceChild(container, pre)
-
-        // Render the mermaid diagram
-        const { svg } = await mermaid.render(`${id}-svg`, code)
-        container.innerHTML = svg
 
         // Mark as processed
         processedRef.current.add(id)
       } catch (error) {
         console.error('Failed to render mermaid diagram:', error)
-        // Keep the original code block on error
+        // Keep the original code block on error and add error class
         pre.classList.add('mermaid-error')
       }
     }
