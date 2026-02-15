@@ -306,6 +306,9 @@ body,
 }
 
 .pane-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 10px 16px;
   font-size: 12px;
   font-weight: 600;
@@ -314,6 +317,163 @@ body,
   letter-spacing: 0.5px;
   background-color: #f0f0f0;
   border-bottom: 1px solid #e0e0e0;
+}
+
+/* Print Button */
+.btn-print {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: #ffffff;
+  color: #374151;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.btn-print:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.btn-print svg {
+  flex-shrink: 0;
+}
+
+/* Dark mode - Print Button */
+.dark .btn-print {
+  background-color: #374151;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+
+.dark .btn-print:hover {
+  background-color: #4b5563;
+  border-color: #6b7280;
+}
+
+/* ================================
+   PRINT STYLES
+   ================================ */
+
+@media print {
+  /* Hide everything except the preview content */
+  .toolbar,
+  .search-panel,
+  .status-bar,
+  .toast-container,
+  .drag-overlay,
+  .editor-pane,
+  .btn-print {
+    display: none !important;
+  }
+
+  /* Ensure the preview pane takes full width */
+  .editor-container {
+    display: block !important;
+    height: auto !important;
+  }
+
+  .preview-pane {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+  }
+
+  .pane-header {
+    display: none !important;
+  }
+
+  .markdown-preview {
+    padding: 0 !important;
+    font-size: 12pt !important;
+    line-height: 1.5 !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  /* Ensure proper page breaks */
+  .markdown-preview h1,
+  .markdown-preview h2,
+  .markdown-preview h3 {
+    page-break-after: avoid;
+  }
+
+  .markdown-preview pre,
+  .markdown-preview blockquote,
+  .markdown-preview table,
+  .markdown-preview figure,
+  .markdown-preview img,
+  .mermaid-container {
+    page-break-inside: avoid;
+  }
+
+  /* Ensure links show their URLs when printed */
+  .markdown-preview a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 90%;
+    color: #666;
+  }
+
+  /* Ensure code blocks don't overflow */
+  .markdown-preview pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    border: 1px solid #ddd;
+  }
+
+  /* Remove background colors for printing */
+  .markdown-preview pre,
+  .markdown-preview code {
+    background-color: #f5f5f5 !important;
+  }
+
+  /* Ensure mermaid diagrams are visible */
+  .mermaid-container {
+    background-color: #fff !important;
+    border: 1px solid #ddd;
+  }
+}
+
+/* Print mode class for preview-only printing */
+body.print-mode .app-container {
+  height: auto;
+}
+
+body.print-mode .toolbar,
+body.print-mode .search-panel,
+body.print-mode .status-bar,
+body.print-mode .toast-container,
+body.print-mode .drag-overlay,
+body.print-mode .editor-pane {
+  display: none !important;
+}
+
+body.print-mode .editor-container {
+  display: block;
+  height: auto;
+}
+
+body.print-mode .preview-pane {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border: none;
+}
+
+body.print-mode .pane-header {
+  display: none;
+}
+
+body.print-mode .markdown-preview {
+  padding: 0;
 }
 
 .markdown-input {
@@ -720,6 +880,18 @@ body,
   color: #9ca3af;
   background-color: #111827;
   border-bottom-color: #374151;
+}
+
+/* Dark mode - Print Button */
+.dark .btn-print {
+  background-color: #374151;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+
+.dark .btn-print:hover {
+  background-color: #4b5563;
+  border-color: #6b7280;
 }
 
 .dark .markdown-input {

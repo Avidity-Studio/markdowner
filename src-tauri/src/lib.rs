@@ -7,6 +7,8 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_store::StoreExt;
 use urlencoding::decode;
 
+mod print;
+
 /// Convert a file:// URL to a local file path
 /// Handles percent-encoding and platform-specific path formats
 fn file_url_to_path(url: &str) -> Option<String> {
@@ -559,7 +561,9 @@ pub fn run() {
       add_to_recents,
       clear_recent_files,
       get_pending_file,
-      set_pending_file
+      set_pending_file,
+      print::print_markdown,
+      print::close_print_window
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

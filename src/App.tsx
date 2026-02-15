@@ -16,13 +16,14 @@ import {
   CheckCircle,
   Info,
   XCircle,
-  PanelRight,
-  PanelLeft,
-  PanelTop,
+  PanelLeftClose,
+  PanelRightClose,
+  Columns2,
   Search,
   ChevronDown,
   ChevronUp,
   CaseSensitive,
+  Printer,
 } from 'lucide-react'
 import { ThemeToggle } from './components/ThemeToggle'
 import './App.css'
@@ -464,6 +465,24 @@ function App() {
     }
   }, [showToast])
 
+  const handlePrint = useCallback(async () => {
+    try {
+      // Get the document title from the current file or use default
+      const title = currentFile ? currentFile.split('/').pop()?.replace('.md', '') || 'Document' : 'Document'
+
+      // Invoke the Rust command to print
+      await invoke('print_markdown', {
+        title,
+        htmlContent: html
+      })
+
+      showToast('Opening print preview...', 'info')
+    } catch (error) {
+      console.error('Failed to print:', error)
+      showToast(`Failed to print: ${error}`, 'error')
+    }
+  }, [currentFile, html, showToast])
+
   const handleMarkdownChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMarkdown(e.target.value)
     setIsDirty(true)
@@ -737,7 +756,7 @@ function App() {
               title="Markdown Only"
               aria-label="Switch to Markdown Only view"
             >
-              <PanelLeft size={16} />
+              <PanelRightClose size={16} />
             </button>
             <button
               onClick={() => setViewMode('split')}
@@ -745,7 +764,7 @@ function App() {
               title="Split View"
               aria-label="Switch to Split view"
             >
-              <PanelTop size={16} />
+              <Columns2 size={16} />
             </button>
             <button
               onClick={() => setViewMode('preview-only')}
@@ -753,7 +772,7 @@ function App() {
               title="Preview Only"
               aria-label="Switch to Preview Only view"
             >
-              <PanelRight size={16} />
+              <PanelLeftClose size={16} />
             </button>
           </div>
 
@@ -913,7 +932,18 @@ function App() {
 
         {/* Preview Pane */}
         <div className="preview-pane">
-          <div className="pane-header">Preview</div>
+          <div className="pane-header">
+            <span>Preview</span>
+            <button
+              onClick={handlePrint}
+              className="btn-print"
+              title="Print Preview"
+              aria-label="Print preview"
+            >
+              <Printer size={14} />
+              <span>Print</span>
+            </button>
+          </div>
           <div
             ref={previewRef}
             className="markdown-preview"
