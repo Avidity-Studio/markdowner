@@ -85,8 +85,12 @@ export function useMermaid(containerRef: React.RefObject<HTMLElement | null>, ht
   }, [html])
 
   // Render diagrams after HTML is set
+  // Use setTimeout to ensure DOM has been updated with the new HTML content
   useEffect(() => {
-    renderMermaidDiagrams()
+    const timeoutId = setTimeout(() => {
+      renderMermaidDiagrams()
+    }, 0)
+    return () => clearTimeout(timeoutId)
   }, [html, renderMermaidDiagrams])
 
   // Watch for theme changes (both system preference and manual toggle)

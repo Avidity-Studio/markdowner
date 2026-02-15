@@ -322,7 +322,7 @@ pub async fn print_markdown(
     
     // Wait a reasonable time for user to interact with the print dialog
     // Most users take 5-15 seconds to configure print settings and either print or cancel
-    std::thread::sleep(std::time::Duration::from_secs(8));
+    std::thread::sleep(std::time::Duration::from_secs(300));
     
     // Check if window still exists and close it
     // The hidden window won't have user interaction, so we just need to clean it up
